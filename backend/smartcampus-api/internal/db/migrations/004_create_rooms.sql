@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS rooms (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    building_id UUID NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
+    floor_id UUID NOT NULL REFERENCES floors(id) ON DELETE CASCADE,
+    number VARCHAR(50) NOT NULL,
+    name VARCHAR(255) NULL,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('lecture', 'computer_lab', 'coworking', 'meeting', 'office', 'library', 'lab', 'other')),
+    capacity INTEGER NOT NULL CHECK (capacity >= 0 AND capacity <= 1000),
+    description TEXT NULL,
+    equipment JSONB DEFAULT '[]'::jsonb,
+    navigation_hint TEXT NULL,
+    nearby_landmarks TEXT NULL,
+    is_bookable BOOLEAN DEFAULT TRUE,
+    is_active BOOLEAN DEFAULT TRUE,
+    x_coord INTEGER NULL,
+    y_coord INTEGER NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(building_id, number)
+);

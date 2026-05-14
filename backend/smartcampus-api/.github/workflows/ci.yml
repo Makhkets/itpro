@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: smartcampus
+          POSTGRES_PASSWORD: smartcampus_password
+          POSTGRES_DB: smartcampus
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U smartcampus -d smartcampus"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+      - run: go mod download
+      - run: test -z "$(gofmt -l cmd internal pkg scripts tests)"
+      - run: go test ./...
+        env:
+          DATABASE_URL: postgres://smartcampus:smartcampus_password@localhost:5432/smartcampus?sslmode=disable
+          REDIS_ADDR: localhost:6379
+          JWT_SECRET: ci_secret_change_me
+      - run: go vet ./...
+      - run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - run: gosec ./...

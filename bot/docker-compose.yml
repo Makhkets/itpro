@@ -1,0 +1,16 @@
+services:
+  bot:
+    build: .
+    env_file: .env
+    environment:
+      - SMARTCAMPUS_API_BASE_URL=${SMARTCAMPUS_API_BASE_URL:-http://smartcampus-api:8080/api/v1}
+    restart: unless-stopped
+    networks:
+      - default
+      - smartcampus
+
+networks:
+  default:
+  smartcampus:
+    external: true
+    name: smartcampus-api_default

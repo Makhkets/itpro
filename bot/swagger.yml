@@ -1,0 +1,755 @@
+openapi: 3.0.3
+info:
+  title: SmartCampus MVP API
+  version: 1.0.0
+  description: Backend API for campus navigation, schedules, bookings, Telegram account linking data, AI assistant, attendance, library and analytics. The Telegram bot runtime is a separate Python service.
+servers:
+  - url: http://localhost:8080/api/v1
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, example: student@example.com }
+        password: { type: string, example: Student123! }
+    RegisterRequest:
+      type: object
+      required: [fullName, email, password, role]
+      properties:
+        fullName: { type: string }
+        email: { type: string }
+        password: { type: string, minLength: 8 }
+        role: { type: string, enum: [student, teacher, applicant, librarian, admin] }
+        groupName: { type: string }
+        department: { type: string }
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string }
+        email: { type: string }
+        role: { type: string }
+        groupName: { type: string }
+        department: { type: string }
+        telegramChatId: { type: integer, format: int64, nullable: true }
+        telegramUsername: { type: string }
+        isTelegramVerified: { type: boolean }
+        personalDataConsent: { type: boolean }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AuthResult:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        token: { type: string }
+    PersonalDataConsentRequest:
+      type: object
+      required: [consent]
+      properties:
+        consent:
+          type: boolean
+          description: Set to true when the user accepts personal data processing.
+          example: true
+    PersonalDataConsentResult:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              description: Fresh JWT with updated personalDataConsent claim. Telegram bot must replace the stored token with this value.
+    TelegramUpdateRequest:
+      type: object
+      required: [chatId]
+      properties:
+        chatId: { type: integer, format: int64, example: 123456789 }
+        username: { type: string, example: student_user }
+    TelegramLinkStartResponse:
+      type: object
+      properties:
+        code: { type: string, example: "123456" }
+        expiresIn: { type: string, example: 10m }
+        command: { type: string, example: "/link 123456" }
+    TelegramLinkVerifyRequest:
+      type: object
+      required: [code, chatId]
+      properties:
+        code: { type: string, example: "123456" }
+        chatId: { type: integer, format: int64, example: 123456789 }
+        username: { type: string, example: student_user }
+    LibraryBook:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, example: Clean Code }
+        author: { type: string, example: Robert C. Martin }
+        isbn: { type: string, example: "9780132350884" }
+        category: { type: string, example: software }
+        description: { type: string }
+        totalCopies: { type: integer, example: 3 }
+        availableCopies: { type: integer, example: 2 }
+        location: { type: string, example: "LIB-101, shelf SE-2" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    LibraryBookUpsertRequest:
+      type: object
+      required: [title, totalCopies, availableCopies]
+      properties:
+        title: { type: string, example: Clean Code }
+        author: { type: string, example: Robert C. Martin }
+        isbn: { type: string, example: "9780132350884" }
+        category: { type: string, example: software }
+        description: { type: string }
+        totalCopies: { type: integer, minimum: 0, example: 3 }
+        availableCopies: { type: integer, minimum: 0, example: 3 }
+        location: { type: string, example: "LIB-101, shelf SE-2" }
+    BorrowBookRequest:
+      type: object
+      properties:
+        dueAt:
+          type: string
+          format: date-time
+          description: Optional due date. If omitted, backend sets it to 14 days from now.
+          example: "2026-06-01T00:00:00Z"
+    LibraryLoanCreateRequest:
+      type: object
+      required: [bookId, userId]
+      properties:
+        bookId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        dueAt:
+          type: string
+          format: date-time
+          description: Optional due date. If omitted, backend sets it to 14 days from now.
+          example: "2026-06-01T00:00:00Z"
+    LibraryLoan:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        bookId: { type: string, format: uuid }
+        book:
+          allOf:
+            - $ref: '#/components/schemas/LibraryBook'
+          description: Embedded book object is returned by borrow, list loans, my loans and return endpoints.
+        userId: { type: string, format: uuid }
+        issuedBy: { type: string, format: uuid }
+        returnedBy: { type: string, format: uuid }
+        status: { type: string, enum: [active, returned, overdue] }
+        issuedAt: { type: string, format: date-time }
+        dueAt: { type: string, format: date-time }
+        returnedAt: { type: string, format: date-time, nullable: true }
+    Room:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        buildingId: { type: string, format: uuid }
+        floorId: { type: string, format: uuid }
+        number: { type: string, example: A-305 }
+        type: { type: string, enum: [lecture, computer_lab, coworking, meeting, office, library, lab, other] }
+        capacity: { type: integer }
+        equipment:
+          type: array
+          items: { type: string }
+        navigationHint: { type: string }
+    Booking:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        roomId: { type: string, format: uuid }
+        title: { type: string }
+        purpose: { type: string }
+        bookingType: { type: string }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        status: { type: string, enum: [pending, approved, rejected, cancelled] }
+paths:
+  /health:
+    get:
+      security: []
+      summary: Health check
+      responses:
+        '200': { description: OK }
+  /auth/register:
+    post:
+      security: []
+      summary: Register user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '201': { description: Created }
+        '400': { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /auth/login:
+    post:
+      security: []
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Auth token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResult' }
+  /users/me:
+    get:
+      summary: Current user
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+  /users/me/telegram:
+    patch:
+      summary: Update Telegram link fields
+      description: Requires personalDataConsent=true. Backend checks the current database value, not only the JWT claim.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TelegramUpdateRequest' }
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '403': { description: Personal data consent is required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /users/me/personal-data-consent:
+    patch:
+      summary: Update personal data consent and issue fresh JWT
+      description: Telegram bot must replace the stored JWT with `token` from this response and update session user fields.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PersonalDataConsentRequest' }
+      responses:
+        '200':
+          description: Updated user fields plus fresh JWT
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PersonalDataConsentResult' }
+        '400': { description: Invalid request body, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /privacy/me:
+    get:
+      summary: Stored personal data categories
+      responses:
+        '200': { description: Privacy data }
+  /privacy/export:
+    post:
+      summary: Export own personal data
+      responses:
+        '200': { description: Export JSON }
+  /privacy/delete-request:
+    post:
+      summary: Create delete request audit event
+      responses:
+        '200': { description: Request created }
+  /buildings:
+    get:
+      summary: List buildings
+      responses:
+        '200': { description: Buildings }
+    post:
+      summary: Create building
+      responses:
+        '201': { description: Created }
+  /buildings/{id}:
+    get:
+      summary: Get building
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Building }
+    patch:
+      summary: Update building
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Building }
+  /buildings/{buildingId}/floors:
+    get:
+      summary: List floors
+      parameters: [{ name: buildingId, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Floors }
+    post:
+      summary: Create floor
+      parameters: [{ name: buildingId, in: path, required: true, schema: { type: string } }]
+      responses:
+        '201': { description: Created }
+  /rooms/search:
+    get:
+      summary: Search rooms
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: buildingId, in: query, schema: { type: string } }
+        - { name: type, in: query, schema: { type: string } }
+        - { name: equipment, in: query, schema: { type: string } }
+        - { name: capacityMin, in: query, schema: { type: integer } }
+      responses:
+        '200': { description: Rooms }
+  /rooms:
+    get:
+      summary: List rooms
+      responses:
+        '200': { description: Rooms }
+    post:
+      summary: Create room
+      responses:
+        '201': { description: Created }
+  /rooms/{id}:
+    get:
+      summary: Get room
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          description: Room
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Room' }
+    patch:
+      summary: Update room
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Room }
+  /navigation/room/{roomId}:
+    get:
+      summary: Room navigation hint
+      parameters: [{ name: roomId, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Navigation }
+  /navigation/routes:
+    get:
+      summary: Building-to-building routes
+      responses:
+        '200': { description: Routes }
+    post:
+      summary: Create route
+      responses:
+        '201': { description: Created }
+  /navigation/routes/{id}:
+    patch:
+      summary: Update route
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Route }
+  /rooms/{roomId}/schedule:
+    get:
+      summary: Room schedule
+      parameters: [{ name: roomId, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Schedule }
+  /schedule/group/{groupName}:
+    get:
+      summary: Group schedule
+      parameters: [{ name: groupName, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Schedule }
+  /schedule/teacher/{teacherId}:
+    get:
+      summary: Teacher schedule
+      parameters: [{ name: teacherId, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Schedule }
+  /schedule/current:
+    get:
+      summary: Current and next lesson
+      responses:
+        '200': { description: Current schedule }
+  /schedules:
+    post:
+      summary: Create schedule
+      responses:
+        '201': { description: Created }
+  /schedules/{id}:
+    patch:
+      summary: Update schedule
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Schedule }
+    delete:
+      summary: Delete schedule
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '204': { description: Deleted }
+  /rooms/{roomId}/availability:
+    get:
+      summary: Room availability
+      parameters: [{ name: roomId, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Availability }
+  /bookings:
+    get:
+      summary: Admin list bookings
+      responses:
+        '200': { description: Bookings }
+    post:
+      summary: Create booking
+      responses:
+        '201':
+          description: Booking
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+  /bookings/my:
+    get:
+      summary: My bookings
+      responses:
+        '200': { description: Bookings }
+  /bookings/{id}:
+    get:
+      summary: Get booking
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Booking }
+  /bookings/{id}/approve:
+    patch:
+      summary: Approve booking
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Booking approved }
+        '409': { description: Conflict }
+  /bookings/{id}/reject:
+    patch:
+      summary: Reject booking
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Booking rejected }
+  /bookings/{id}/cancel:
+    patch:
+      summary: Cancel own pending booking
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Booking cancelled }
+  /notifications:
+    get:
+      summary: List own notifications
+      responses:
+        '200': { description: Notifications }
+  /notifications/{id}/read:
+    patch:
+      summary: Mark notification read
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: OK }
+  /notifications/read-all:
+    patch:
+      summary: Mark all notifications read
+      responses:
+        '200': { description: OK }
+  /telegram/link/start:
+    post:
+      summary: Create Telegram verification code
+      description: Requires personalDataConsent=true. Use after login to start linking a Telegram chat.
+      responses:
+        '200':
+          description: Verification code and /link command
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TelegramLinkStartResponse' }
+        '403': { description: Personal data consent is required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /telegram/link/verify:
+    post:
+      summary: Verify Telegram link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TelegramLinkVerifyRequest' }
+      responses:
+        '200':
+          description: Updated user with verified Telegram chat
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400': { description: Invalid request body, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { description: Verification code belongs to another user, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /ai/chat:
+    post:
+      summary: AI assistant chat
+      responses:
+        '200': { description: AI answer }
+  /ai/sessions:
+    get:
+      summary: List AI sessions
+      responses:
+        '200': { description: Sessions }
+  /ai/sessions/{id}/messages:
+    get:
+      summary: AI session messages
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Messages }
+  /ai/sessions/{id}:
+    delete:
+      summary: Delete AI session
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '204': { description: Deleted }
+  /applicant-faq:
+    get:
+      security: []
+      summary: List applicant FAQ
+      responses:
+        '200': { description: FAQ }
+    post:
+      summary: Create FAQ
+      responses:
+        '201': { description: Created }
+  /applicant-faq/search:
+    get:
+      security: []
+      summary: Search applicant FAQ
+      responses:
+        '200': { description: FAQ }
+  /applicant-faq/{id}:
+    patch:
+      summary: Update FAQ
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: FAQ }
+    delete:
+      summary: Delete FAQ
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '204': { description: Deleted }
+  /attendance/sessions:
+    get:
+      summary: List attendance sessions
+      responses:
+        '200': { description: Sessions }
+    post:
+      summary: Create attendance session
+      responses:
+        '201': { description: Created }
+  /attendance/sessions/{id}/records:
+    get:
+      summary: List attendance records
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Records }
+    post:
+      summary: Mark attendance
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Records }
+  /attendance/my:
+    get:
+      summary: Student own attendance
+      responses:
+        '200': { description: Records }
+  /library/books/search:
+    get:
+      summary: Search library books
+      parameters:
+        - { name: q, in: query, required: false, schema: { type: string }, description: Search in title and description }
+        - { name: author, in: query, required: false, schema: { type: string }, description: Case-insensitive author filter }
+        - { name: category, in: query, required: false, schema: { type: string }, description: Exact category filter }
+      responses:
+        '200':
+          description: Books
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LibraryBook' }
+  /library/books/{id}:
+    get:
+      summary: Get book
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: Book
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LibraryBook' }
+        '404': { description: Book not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    patch:
+      summary: Update book
+      description: Librarian/admin only.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LibraryBookUpsertRequest' }
+      responses:
+        '200':
+          description: Book
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LibraryBook' }
+        '403': { description: Librarian or admin role required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '404': { description: Book not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /library/books/{id}/borrow:
+    post:
+      summary: Borrow book as current student or teacher
+      description: Creates an active loan for the current user. If dueAt is omitted, backend sets dueAt to 14 days from now. Returns 409 if there are no available copies or the user already has an active loan for this book.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BorrowBookRequest' }
+      responses:
+        '201':
+          description: Loan with embedded book
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LibraryLoan' }
+        '400': { description: Invalid dueAt or request body, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { description: Student or teacher role required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '404': { description: Book not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: No available copies or duplicate active loan, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /library/books:
+    post:
+      summary: Create book
+      description: Librarian/admin only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LibraryBookUpsertRequest' }
+      responses:
+        '201':
+          description: Created book
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LibraryBook' }
+        '403': { description: Librarian or admin role required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /library/loans:
+    get:
+      summary: List loans
+      description: Librarian/admin only. Returned loan objects include embedded `book`.
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [active, returned, overdue] } }
+      responses:
+        '200':
+          description: Loans
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LibraryLoan' }
+        '403': { description: Librarian or admin role required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    post:
+      summary: Create loan
+      description: Librarian/admin only. Creates a loan for the selected user. If dueAt is omitted, backend sets dueAt to 14 days from now.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LibraryLoanCreateRequest' }
+      responses:
+        '201':
+          description: Loan with embedded book
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LibraryLoan' }
+        '400': { description: Invalid request body, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { description: Librarian or admin role required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '404': { description: Book or user not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: No available copies or duplicate active loan, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /library/loans/my:
+    get:
+      summary: My library loans
+      description: Student/teacher only. Returned loan objects include embedded `book`, so bot can render title, author, dueAt and status without extra book requests.
+      responses:
+        '200':
+          description: Own loans
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LibraryLoan' }
+        '403': { description: Student or teacher role required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /library/loans/{id}/return:
+    patch:
+      summary: Return loan
+      description: Librarian/admin only. Returns a loan and increments available copies.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: Returned loan with embedded book
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LibraryLoan' }
+        '403': { description: Librarian or admin role required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '404': { description: Loan not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: Loan is already returned, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /analytics/summary:
+    get:
+      summary: Admin analytics summary
+      responses:
+        '200': { description: Summary }
+  /analytics/bookings-by-status:
+    get:
+      summary: Booking status counters
+      responses:
+        '200': { description: Counters }
+  /analytics/room-utilization:
+    get:
+      summary: Room utilization
+      responses:
+        '200': { description: Utilization }
+  /analytics/attendance/summary:
+    get:
+      summary: Attendance summary
+      responses:
+        '200': { description: Summary }
+  /analytics/attendance/by-group:
+    get:
+      summary: Attendance by group
+      responses:
+        '200': { description: Summary }
+  /analytics/attendance/by-student/{studentId}:
+    get:
+      summary: Attendance by student
+      parameters: [{ name: studentId, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Summary }
+  /analytics/library/summary:
+    get:
+      summary: Library summary
+      responses:
+        '200': { description: Summary }
+  /analytics/telegram/summary:
+    get:
+      summary: Telegram summary
+      responses:
+        '200': { description: Summary }
+  /analytics/ai/summary:
+    get:
+      summary: AI usage summary
+      responses:
+        '200': { description: Summary }
+  /audit-logs:
+    get:
+      summary: Admin audit log list
+      responses:
+        '200': { description: Audit logs }
