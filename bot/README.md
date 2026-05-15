@@ -51,12 +51,15 @@ tests/                # pytest
 
 ```env
 BOT_TOKEN=...                                # токен от @BotFather
+TELEGRAM_PROXY_URL=                          # http://user:password@host:port, socks5://user:password@host:port or host:port:user:password
+TELEGRAM_REQUEST_TIMEOUT_SECONDS=30
 SMARTCAMPUS_API_BASE_URL=http://localhost:8080/api/v1
 BOT_MODE=polling                              # polling | webhook
 WEBHOOK_URL=                                  # для webhook-режима
 WEBHOOK_SECRET=
+DROP_PENDING_UPDATES=false                    # true = удалить очередь Telegram при старте
 SESSION_TTL_HOURS=24
-REQUEST_TIMEOUT_SECONDS=15
+REQUEST_TIMEOUT_SECONDS=30
 LOG_LEVEL=INFO
 ```
 

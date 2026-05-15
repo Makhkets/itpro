@@ -3,9 +3,11 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
+from urllib.parse import quote
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
@@ -33,10 +35,38 @@ from app.services.session_store import SessionStore
 logger = logging.getLogger(__name__)
 
 
+def normalize_proxy_url(raw_proxy: str) -> str:
+    proxy = raw_proxy.strip()
+    if not proxy:
+        return ""
+    if "://" in proxy:
+        return proxy
+
+    parts = proxy.split(":", 3)
+    if len(parts) != 4:
+        raise ValueError(
+            "TELEGRAM_PROXY_URL must be a full URL or host:port:username:password"
+        )
+    host, port, username, password = parts
+    username = quote(username, safe="")
+    password = quote(password, safe="")
+    return f"http://{username}:{password}@{host}:{port}"
+
+
 @asynccontextmanager
 async def build_app(settings: Settings) -> AsyncIterator[tuple[Bot, Dispatcher]]:
+    session: AiohttpSession | None = None
+    proxy_url = normalize_proxy_url(settings.telegram_proxy_url)
+    if proxy_url:
+        logger.info("Telegram proxy is enabled")
+        session = AiohttpSession(
+            proxy=proxy_url,
+            timeout=settings.telegram_request_timeout_seconds,
+        )
+
     bot = Bot(
         token=settings.bot_token,
+        session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     api_client = ApiClient(

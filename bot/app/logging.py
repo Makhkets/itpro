@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import sys
 
-SENSITIVE_KEYS = {"password", "token", "authorization", "jwt", "bot_token", "secret"}
+SENSITIVE_KEYS = {"password", "token", "authorization", "jwt", "bot_token", "secret", "proxy"}
 
 
 class SensitiveFilter(logging.Filter):

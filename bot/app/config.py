@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     )
 
     bot_token: str = Field(..., alias="BOT_TOKEN")
+    telegram_proxy_url: str = Field(default="", alias="TELEGRAM_PROXY_URL")
+    telegram_request_timeout_seconds: int = Field(default=30, alias="TELEGRAM_REQUEST_TIMEOUT_SECONDS")
     api_base_url: str = Field(
         default="http://localhost:8080/api/v1",
         alias="SMARTCAMPUS_API_BASE_URL",
@@ -23,8 +25,9 @@ class Settings(BaseSettings):
     bot_mode: Literal["polling", "webhook"] = Field(default="polling", alias="BOT_MODE")
     webhook_url: str = Field(default="", alias="WEBHOOK_URL")
     webhook_secret: str = Field(default="", alias="WEBHOOK_SECRET")
+    drop_pending_updates: bool = Field(default=False, alias="DROP_PENDING_UPDATES")
     session_ttl_hours: int = Field(default=24, alias="SESSION_TTL_HOURS")
-    request_timeout_seconds: int = Field(default=15, alias="REQUEST_TIMEOUT_SECONDS")
+    request_timeout_seconds: int = Field(default=30, alias="REQUEST_TIMEOUT_SECONDS")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
 

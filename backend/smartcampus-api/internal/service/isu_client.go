@@ -19,7 +19,7 @@ const (
 	isuOrigin      = "https://isu.gstou.ru"
 	isuReferer     = "https://isu.gstou.ru/"
 	isuCacheTTL    = 5 * time.Minute
-	isuHTTPTimeout = 25 * time.Second
+	isuHTTPTimeout = 12 * time.Second
 )
 
 // ISUEntry mirrors a single timetable entry returned by ISU GSTOU public API.
@@ -81,9 +81,20 @@ type ISUClient struct {
 	redis *redis.Client
 }
 
-func NewISUClient(redisClient *redis.Client) *ISUClient {
+func NewISUClient(redisClient *redis.Client, proxyURL string) *ISUClient {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+	}
+	if proxyURL != "" {
+		if parsed, err := url.Parse(proxyURL); err == nil && parsed.Host != "" {
+			transport.Proxy = http.ProxyURL(parsed)
+		}
+	}
 	return &ISUClient{
-		http:  &http.Client{Timeout: isuHTTPTimeout},
+		http: &http.Client{
+			Timeout:   isuHTTPTimeout,
+			Transport: transport,
+		},
 		redis: redisClient,
 	}
 }

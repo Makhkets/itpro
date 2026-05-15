@@ -69,7 +69,7 @@ func New(repo *repository.Repository, redisClient *redis.Client, cfg config.Conf
 		cfg:   cfg,
 		log:   log,
 		http:  &http.Client{Timeout: 15 * time.Second},
-		isu:   NewISUClient(redisClient),
+		isu:   NewISUClient(redisClient, cfg.ISUProxyURL),
 	}
 }
 
