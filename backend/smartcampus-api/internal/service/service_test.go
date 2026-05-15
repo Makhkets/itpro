@@ -23,9 +23,101 @@ func TestBuildFreeSlots(t *testing.T) {
 	}
 }
 
+func TestEnrichAttendanceAnalyticsCalculatesAdmissionRisk(t *testing.T) {
+	item := enrichAttendanceAnalytics(domain.StudentAttendanceAnalytics{
+		Summary: domain.AttendanceSummary{
+			TotalRecords: 6,
+			Present:      1,
+			Absent:       4,
+			Late:         1,
+			Rate:         float64(2) / float64(6),
+		},
+	})
+
+	if item.CurrentPoints != 58 {
+		t.Fatalf("expected 58 current points, got %d", item.CurrentPoints)
+	}
+	if item.PointsToAdmission != 2 {
+		t.Fatalf("expected 2 points to admission, got %d", item.PointsToAdmission)
+	}
+	if item.AdmissionStatus != "not_admitted" {
+		t.Fatalf("unexpected admission status: %s", item.AdmissionStatus)
+	}
+}
+
 func TestExtractGroup(t *testing.T) {
 	if got := extractGroup("Где сегодня у группы ИСП-21 пары?"); got != "ИСП-21" {
 		t.Fatalf("unexpected group: %s", got)
+	}
+}
+
+func TestComputeOccurrencesUsesExactDate(t *testing.T) {
+	loc := time.UTC
+	rawDate := "2026-05-18"
+	from := time.Date(2026, 5, 14, 0, 0, 0, 0, loc)
+	to := time.Date(2026, 5, 28, 23, 59, 59, 0, loc)
+
+	got := computeOccurrences(ISUEntry{Date: &rawDate, WeekDay: 0, Period: 3}, from, to, loc)
+	if len(got) != 1 {
+		t.Fatalf("expected one occurrence, got %d", len(got))
+	}
+	want := time.Date(2026, 5, 18, 11, 50, 0, 0, loc)
+	if !got[0].Equal(want) {
+		t.Fatalf("unexpected occurrence: got %s want %s", got[0], want)
+	}
+}
+
+func TestComputeEndUsesPairDuration(t *testing.T) {
+	loc := time.UTC
+	start := time.Date(2026, 5, 18, 10, 10, 0, 0, loc)
+	got := computeEnd(ISUEntry{Period: 2, Duration: 2}, start)
+	want := time.Date(2026, 5, 18, 13, 20, 0, 0, loc)
+	if !got.Equal(want) {
+		t.Fatalf("unexpected end: got %s want %s", got, want)
+	}
+}
+
+func TestTeacherUsesActivityType(t *testing.T) {
+	labID := int64(3)
+	entry := ISUEntry{
+		ActivityType: 3,
+		Discipline: ISUDisc{
+			LectureTeacher: ISUTeacher{Name: "Lecture Teacher"},
+			LabTeacher:     ISUTeacher{ID: &labID, Name: "Lab Teacher"},
+		},
+	}
+	if got := teacherName(entry); got != "Lab Teacher" {
+		t.Fatalf("unexpected teacher: %s", got)
+	}
+	if got := teacherIDFor(entry); got != "3" {
+		t.Fatalf("unexpected teacher id: %s", got)
+	}
+}
+
+func TestBuildScheduleKeepsDatedEntriesWithoutWeekday(t *testing.T) {
+	rawDate := "2026-05-18"
+	from := time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 5, 28, 23, 59, 59, 0, time.UTC)
+	entries := []ISUEntry{
+		{
+			ID:           42,
+			WeekDay:      0,
+			Period:       1,
+			Duration:     2,
+			Date:         &rawDate,
+			Auditorium:   ISUAud{Name: "A-101"},
+			Discipline:   ISUDisc{Name: "Databases"},
+			ActivityType: 1,
+			Groups:       []ISUGroup{{Name: "IST-25-2"}},
+		},
+	}
+
+	got := buildSchedule(entries, from, to, nil)
+	if len(got) != 1 {
+		t.Fatalf("expected one schedule item, got %d", len(got))
+	}
+	if got[0].GroupName != "IST-25-2" || got[0].RoomNumber != "A-101" {
+		t.Fatalf("unexpected schedule item: %+v", got[0])
 	}
 }
 

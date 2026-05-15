@@ -55,6 +55,54 @@ components:
         isActive: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    PublicUser:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string, example: Анна Орлова }
+        role: { type: string, example: student }
+        groupName: { type: string, example: ИСИП-21 }
+        department: { type: string, example: Computer Science }
+    AttendanceSummary:
+      type: object
+      properties:
+        totalRecords: { type: integer, example: 6 }
+        present: { type: integer, example: 4 }
+        absent: { type: integer, example: 1 }
+        late: { type: integer, example: 1 }
+        excused: { type: integer, example: 0 }
+        rate: { type: number, format: double, example: 0.8333 }
+    AttendancePolicy:
+      type: object
+      properties:
+        maxSemesterPoints: { type: integer, example: 80 }
+        admissionMinPoints: { type: integer, example: 60 }
+        requiredRate: { type: number, format: double, example: 0.75 }
+        requiredPercent: { type: number, format: double, example: 75 }
+        absencePenaltyPoints: { type: integer, example: 5 }
+        latePenaltyPoints: { type: integer, example: 2 }
+        excusedPenaltyPoints: { type: integer, example: 0 }
+        presentRewardPoints: { type: integer, example: 3 }
+        lateRewardPoints: { type: integer, example: 1 }
+        excusedRewardPoints: { type: integer, example: 2 }
+        admissionRule: { type: string }
+        notes:
+          type: array
+          items: { type: string }
+    StudentAttendanceAnalytics:
+      type: object
+      properties:
+        student: { $ref: '#/components/schemas/PublicUser' }
+        summary: { $ref: '#/components/schemas/AttendanceSummary' }
+        policy: { $ref: '#/components/schemas/AttendancePolicy' }
+        attendancePercent: { type: number, format: double, example: 83.3 }
+        currentPoints: { type: integer, example: 73 }
+        penaltyPoints: { type: integer, example: 7 }
+        rewardPoints: { type: integer, example: 13 }
+        pointsToAdmission: { type: integer, example: 0 }
+        admissionStatus: { type: string, enum: [no_data, admitted, attendance_risk, points_risk, not_admitted] }
+        remainingAbsencesBeforeRisk: { type: integer, example: 2 }
+        recommendation: { type: string }
     AuthResult:
       type: object
       properties:
@@ -360,43 +408,54 @@ paths:
         '200': { description: Route }
   /rooms/{roomId}/schedule:
     get:
-      summary: Room schedule
-      parameters: [{ name: roomId, in: path, required: true, schema: { type: string } }]
+      summary: Room schedule (proxied from ISU GSTOU)
+      description: |
+        Returns schedule occurrences for a specific room. ISU GSTOU has no per-room endpoint,
+        so callers MUST pass `group` to scope the lookup; without it the response is an empty array.
+        Each entry's `id` has the form `isu-{entryId}-{YYYYMMDD}` and is not a UUID.
+      parameters:
+        - { name: roomId, in: path, required: true, schema: { type: string } }
+        - { name: group, in: query, required: false, schema: { type: string }, description: "Group name hint (e.g. ИСТ-25-2). Required to return non-empty results." }
+        - { name: from, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date-time } }
       responses:
         '200': { description: Schedule }
   /schedule/group/{groupName}:
     get:
-      summary: Group schedule
-      parameters: [{ name: groupName, in: path, required: true, schema: { type: string } }]
+      summary: Group schedule (proxied from ISU GSTOU)
+      description: |
+        Fetches the group's timetable from ISU GSTOU and expands recurring entries into concrete
+        date-times in `[from, to]`. Cached in Redis for 5 minutes. ISU 404 → empty array.
+      parameters:
+        - { name: groupName, in: path, required: true, schema: { type: string }, description: "Group name (e.g. ИСТ-25-2)" }
+        - { name: from, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date-time } }
       responses:
         '200': { description: Schedule }
   /schedule/teacher/{teacherId}:
     get:
-      summary: Teacher schedule
-      parameters: [{ name: teacherId, in: path, required: true, schema: { type: string } }]
+      summary: Teacher schedule (proxied from ISU GSTOU)
+      description: |
+        Fetches a teacher's timetable from ISU GSTOU. The path parameter accepts the teacher's
+        surname or full name (e.g. `Шабазов`), NOT a UUID. The legacy `teacherId` name is kept
+        for backward compatibility.
+      parameters:
+        - { name: teacherId, in: path, required: true, schema: { type: string }, description: "Teacher surname or name (URL-encoded UTF-8)" }
+        - { name: from, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date-time } }
       responses:
         '200': { description: Schedule }
   /schedule/current:
     get:
-      summary: Current and next lesson
+      summary: Current and next lesson (proxied from ISU GSTOU)
+      description: |
+        Returns `{ now, currentLesson, nextLesson }`. Group is taken from the `groupName` query
+        parameter; if absent, falls back to the authenticated user's group from JWT claims.
+        Returns null lessons if no group is available.
+      parameters:
+        - { name: groupName, in: query, required: false, schema: { type: string } }
       responses:
         '200': { description: Current schedule }
-  /schedules:
-    post:
-      summary: Create schedule
-      responses:
-        '201': { description: Created }
-  /schedules/{id}:
-    patch:
-      summary: Update schedule
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: Schedule }
-    delete:
-      summary: Delete schedule
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '204': { description: Deleted }
   /rooms/{roomId}/availability:
     get:
       summary: Room availability
@@ -538,6 +597,15 @@ paths:
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
       responses:
         '204': { description: Deleted }
+  /attendance/policy:
+    get:
+      summary: Attendance admission policy
+      responses:
+        '200':
+          description: Demo attendance policy with penalties and admission thresholds
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendancePolicy' }
   /attendance/sessions:
     get:
       summary: List attendance sessions
@@ -563,6 +631,15 @@ paths:
       summary: Student own attendance
       responses:
         '200': { description: Records }
+  /attendance/my/analytics:
+    get:
+      summary: Student own attendance analytics
+      responses:
+        '200':
+          description: Attendance percent, penalties, points and admission forecast
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentAttendanceAnalytics' }
   /library/books/search:
     get:
       summary: Search library books
@@ -727,12 +804,29 @@ paths:
       summary: Attendance by group
       responses:
         '200': { description: Summary }
+  /analytics/attendance/students:
+    get:
+      summary: Student attendance analytics list
+      parameters:
+        - { name: groupName, in: query, required: false, schema: { type: string }, description: Optional group filter }
+      responses:
+        '200':
+          description: Students with attendance percent, penalties, points and admission forecast
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StudentAttendanceAnalytics' }
   /analytics/attendance/by-student/{studentId}:
     get:
       summary: Attendance by student
       parameters: [{ name: studentId, in: path, required: true, schema: { type: string } }]
       responses:
-        '200': { description: Summary }
+        '200':
+          description: Student attendance analytics
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentAttendanceAnalytics' }
   /analytics/library/summary:
     get:
       summary: Library summary

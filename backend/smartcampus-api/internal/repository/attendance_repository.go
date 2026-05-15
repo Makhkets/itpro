@@ -133,6 +133,52 @@ func (r *Repository) CountAttendanceSessions(ctx context.Context) (int, error) {
 	return count, err
 }
 
+func (r *Repository) StudentAttendanceAnalytics(ctx context.Context, studentID string) (domain.StudentAttendanceAnalytics, error) {
+	row := r.pool.QueryRow(ctx, `
+		SELECT u.id::text, u.full_name, u.role, COALESCE(u.group_name,''), COALESCE(u.department,''),
+		       COUNT(ar.id),
+		       COUNT(ar.id) FILTER (WHERE ar.status='present'),
+		       COUNT(ar.id) FILTER (WHERE ar.status='absent'),
+		       COUNT(ar.id) FILTER (WHERE ar.status='late'),
+		       COUNT(ar.id) FILTER (WHERE ar.status='excused')
+		FROM users u
+		LEFT JOIN attendance_records ar ON ar.student_id=u.id
+		WHERE u.id=$1 AND u.role='student' AND u.is_active=TRUE
+		GROUP BY u.id, u.full_name, u.role, u.group_name, u.department`, studentID)
+	item, err := scanStudentAttendanceAnalytics(row)
+	return item, normalizeErr(err)
+}
+
+func (r *Repository) ListStudentAttendanceAnalytics(ctx context.Context, groupName string) ([]domain.StudentAttendanceAnalytics, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT u.id::text, u.full_name, u.role, COALESCE(u.group_name,''), COALESCE(u.department,''),
+		       COUNT(ar.id),
+		       COUNT(ar.id) FILTER (WHERE ar.status='present'),
+		       COUNT(ar.id) FILTER (WHERE ar.status='absent'),
+		       COUNT(ar.id) FILTER (WHERE ar.status='late'),
+		       COUNT(ar.id) FILTER (WHERE ar.status='excused')
+		FROM users u
+		LEFT JOIN attendance_records ar ON ar.student_id=u.id
+		WHERE u.role='student'
+		  AND u.is_active=TRUE
+		  AND ($1='' OR lower(u.group_name)=lower($1))
+		GROUP BY u.id, u.full_name, u.role, u.group_name, u.department
+		ORDER BY u.group_name, u.full_name`, groupName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.StudentAttendanceAnalytics{}
+	for rows.Next() {
+		item, err := scanStudentAttendanceAnalytics(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
 type attendanceSessionScanner interface {
 	Scan(dest ...any) error
 }
@@ -163,4 +209,24 @@ func scanAttendanceRecords(rows rowsScanner) ([]domain.AttendanceRecord, error) 
 		out = append(out, item)
 	}
 	return out, rows.Err()
+}
+
+func scanStudentAttendanceAnalytics(row attendanceSessionScanner) (domain.StudentAttendanceAnalytics, error) {
+	var item domain.StudentAttendanceAnalytics
+	err := row.Scan(
+		&item.Student.ID,
+		&item.Student.FullName,
+		&item.Student.Role,
+		&item.Student.GroupName,
+		&item.Student.Department,
+		&item.Summary.TotalRecords,
+		&item.Summary.Present,
+		&item.Summary.Absent,
+		&item.Summary.Late,
+		&item.Summary.Excused,
+	)
+	if item.Summary.TotalRecords > 0 {
+		item.Summary.Rate = float64(item.Summary.Present+item.Summary.Late+item.Summary.Excused) / float64(item.Summary.TotalRecords)
+	}
+	return item, err
 }

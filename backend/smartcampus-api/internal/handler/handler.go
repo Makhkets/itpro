@@ -66,9 +66,6 @@ func (h *Handler) RegisterRoutes(api *gin.RouterGroup, redisClient *redis.Client
 	protected.GET("/schedule/group/:groupName", h.GroupSchedule)
 	protected.GET("/schedule/teacher/:teacherId", h.TeacherSchedule)
 	protected.GET("/schedule/current", h.CurrentSchedule)
-	protected.POST("/schedules", middleware.RequireRole("admin"), h.CreateSchedule)
-	protected.PATCH("/schedules/:id", middleware.RequireRole("admin"), h.UpdateSchedule)
-	protected.DELETE("/schedules/:id", middleware.RequireRole("admin"), h.DeleteSchedule)
 	protected.GET("/rooms/:id/availability", h.RoomAvailability)
 
 	protected.POST("/bookings", h.CreateBooking)
@@ -94,6 +91,8 @@ func (h *Handler) RegisterRoutes(api *gin.RouterGroup, redisClient *redis.Client
 	protected.PATCH("/applicant-faq/:id", middleware.RequireRole("admin"), h.UpdateFAQ)
 	protected.DELETE("/applicant-faq/:id", middleware.RequireRole("admin"), h.DeleteFAQ)
 
+	protected.GET("/attendance/policy", h.AttendancePolicy)
+	protected.GET("/attendance/my/analytics", middleware.RequireRole("student"), h.MyAttendanceAnalytics)
 	protected.POST("/attendance/sessions", middleware.RequireRole("teacher", "admin"), h.CreateAttendanceSession)
 	protected.GET("/attendance/sessions", middleware.RequireRole("teacher", "admin"), h.ListAttendanceSessions)
 	protected.POST("/attendance/sessions/:id/records", middleware.RequireRole("teacher", "admin"), h.MarkAttendance)
@@ -101,6 +100,7 @@ func (h *Handler) RegisterRoutes(api *gin.RouterGroup, redisClient *redis.Client
 	protected.GET("/attendance/my", middleware.RequireRole("student"), h.MyAttendance)
 	protected.GET("/analytics/attendance/summary", middleware.RequireRole("admin"), h.AttendanceSummary)
 	protected.GET("/analytics/attendance/by-group", middleware.RequireRole("teacher", "admin"), h.AttendanceByGroup)
+	protected.GET("/analytics/attendance/students", middleware.RequireRole("teacher", "admin"), h.AttendanceStudentsAnalytics)
 	protected.GET("/analytics/attendance/by-student/:studentId", h.AttendanceByStudent)
 
 	protected.GET("/library/books/search", h.SearchBooks)
@@ -323,58 +323,35 @@ func (h *Handler) UpdateRoute(c *gin.Context) {
 	write(c, item, mapRepoErr(err))
 }
 
+// RoomSchedule returns schedule entries for a room. ISU has no per-room endpoint,
+// so callers must pass ?group= to scope the lookup.
 func (h *Handler) RoomSchedule(c *gin.Context) {
 	from, to := rangeQuery(c)
-	items, err := h.repo.ListRoomSchedule(c.Request.Context(), c.Param("id"), from, to)
-	write(c, items, mapRepoErr(err))
+	items, err := h.svc.RoomScheduleISU(c.Request.Context(), c.Param("id"), c.Query("group"), from, to)
+	write(c, items, err)
 }
 
 func (h *Handler) GroupSchedule(c *gin.Context) {
 	from, to := rangeQuery(c)
-	items, err := h.repo.ListGroupSchedule(c.Request.Context(), c.Param("groupName"), from, to)
-	write(c, items, mapRepoErr(err))
+	items, err := h.svc.GroupScheduleISU(c.Request.Context(), c.Param("groupName"), from, to)
+	write(c, items, err)
 }
 
+// TeacherSchedule accepts a teacher surname/name (ISU API filters by substring).
+// The path param is named teacherId for backward compatibility.
 func (h *Handler) TeacherSchedule(c *gin.Context) {
 	from, to := rangeQuery(c)
-	items, err := h.repo.ListTeacherSchedule(c.Request.Context(), c.Param("teacherId"), from, to)
-	write(c, items, mapRepoErr(err))
+	items, err := h.svc.TeacherScheduleISU(c.Request.Context(), c.Param("teacherId"), from, to)
+	write(c, items, err)
 }
 
 func (h *Handler) CurrentSchedule(c *gin.Context) {
-	item, err := h.repo.CurrentSchedule(c.Request.Context(), c.Query("buildingId"), c.Query("roomId"), c.Query("groupName"), time.Now())
-	write(c, item, mapRepoErr(err))
-}
-
-func (h *Handler) CreateSchedule(c *gin.Context) {
-	var req repository.ScheduleParams
-	if !bind(c, &req) {
-		return
+	group := c.Query("groupName")
+	if group == "" {
+		group = c.GetString(middleware.ContextGroupName)
 	}
-	req.CreatedBy = c.GetString(middleware.ContextUserID)
-	item, err := h.repo.CreateSchedule(c.Request.Context(), req)
-	if err == nil {
-		_ = h.svc.Audit(c.Request.Context(), meta(c), "create_schedule", "schedule", item.ID, nil)
-	}
-	writeCreated(c, item, mapRepoErr(err))
-}
-
-func (h *Handler) UpdateSchedule(c *gin.Context) {
-	var req repository.ScheduleParams
-	if !bind(c, &req) {
-		return
-	}
-	item, err := h.repo.UpdateSchedule(c.Request.Context(), c.Param("id"), req)
-	write(c, item, mapRepoErr(err))
-}
-
-func (h *Handler) DeleteSchedule(c *gin.Context) {
-	err := h.repo.DeleteSchedule(c.Request.Context(), c.Param("id"))
-	if err != nil {
-		response.WriteError(c, mapRepoErr(err))
-		return
-	}
-	response.NoContent(c)
+	item, err := h.svc.CurrentScheduleISU(c.Request.Context(), group, time.Now())
+	write(c, item, err)
 }
 
 func (h *Handler) RoomAvailability(c *gin.Context) {
@@ -558,6 +535,15 @@ func (h *Handler) DeleteFAQ(c *gin.Context) {
 	response.NoContent(c)
 }
 
+func (h *Handler) AttendancePolicy(c *gin.Context) {
+	response.OK(c, h.svc.AttendancePolicy())
+}
+
+func (h *Handler) MyAttendanceAnalytics(c *gin.Context) {
+	item, err := h.svc.MyAttendanceAnalytics(c.Request.Context(), meta(c))
+	write(c, item, err)
+}
+
 func (h *Handler) CreateAttendanceSession(c *gin.Context) {
 	var req repository.AttendanceSessionParams
 	if !bind(c, &req) {
@@ -605,6 +591,11 @@ func (h *Handler) AttendanceSummary(c *gin.Context) {
 func (h *Handler) AttendanceByGroup(c *gin.Context) {
 	item, err := h.repo.AttendanceSummary(c.Request.Context(), c.Query("groupName"), "")
 	write(c, item, mapRepoErr(err))
+}
+
+func (h *Handler) AttendanceStudentsAnalytics(c *gin.Context) {
+	items, err := h.svc.AttendanceStudentsAnalytics(c.Request.Context(), c.Query("groupName"))
+	write(c, items, err)
 }
 
 func (h *Handler) AttendanceByStudent(c *gin.Context) {

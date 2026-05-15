@@ -2,19 +2,24 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from app.keyboards.common import back_home_row, pagination_row
+from app.keyboards.common import back_home_row, pagination_row, styled_button
 
 
-def buildings_kb(buildings: Sequence[dict[str, Any]], page: int, has_prev: bool, has_next: bool) -> InlineKeyboardMarkup:
+def buildings_kb(
+    buildings: Sequence[dict[str, Any]],
+    page: int,
+    has_prev: bool,
+    has_next: bool,
+) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     for b in buildings:
         name = b.get("name") or b.get("title") or "Корпус"
         kb.row(
-            InlineKeyboardButton(
-                text=f"🏛 {name}",
+            styled_button(
+                f"🏛 {name}",
                 callback_data=f"campus:building:{b.get('id')}",
             )
         )
@@ -28,10 +33,10 @@ def buildings_kb(buildings: Sequence[dict[str, Any]], page: int, has_prev: bool,
 def building_detail_kb(building_id: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.row(
-        InlineKeyboardButton(text="🪜 Этажи", callback_data=f"campus:floors:{building_id}"),
-        InlineKeyboardButton(text="🚪 Аудитории", callback_data=f"campus:rooms:{building_id}:1"),
+        styled_button("🪜 Этажи", callback_data=f"campus:floors:{building_id}"),
+        styled_button("🚪 Аудитории", callback_data=f"campus:rooms:{building_id}:1"),
     )
-    kb.row(InlineKeyboardButton(text="🧭 Маршруты", callback_data="campus:routes"))
+    kb.row(styled_button("🧭 Маршруты", callback_data="campus:routes"))
     kb.row(*back_home_row())
     return kb.as_markup()
 
@@ -41,13 +46,13 @@ def floors_kb(building_id: str, floors: Sequence[dict[str, Any]]) -> InlineKeybo
     for f in floors:
         label = f.get("name") or f.get("number") or f.get("floor") or "Этаж"
         kb.row(
-            InlineKeyboardButton(
-                text=f"🪜 {label}",
+            styled_button(
+                f"🪜 {label}",
                 callback_data=f"campus:floor:{building_id}:{f.get('id')}",
             )
         )
     kb.row(
-        InlineKeyboardButton(text="⬅️ К корпусу", callback_data=f"campus:building:{building_id}")
+        styled_button("⬅️ К корпусу", callback_data=f"campus:building:{building_id}")
     )
-    kb.row(InlineKeyboardButton(text="🏠 Главное меню", callback_data="menu:home"))
+    kb.row(styled_button("🏠 Главное меню", callback_data="menu:home"))
     return kb.as_markup()

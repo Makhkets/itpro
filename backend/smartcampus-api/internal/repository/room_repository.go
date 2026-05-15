@@ -142,6 +142,56 @@ func (r *Repository) UpdateRoom(ctx context.Context, id string, p RoomParams) (d
 	return item, normalizeErr(err)
 }
 
+// LookupRoomIDsByNames returns a map auditoriumName -> room.id for the given names.
+// Matches against rooms.number and rooms.name (case-insensitive). Missing names are absent from the map.
+func (r *Repository) LookupRoomIDsByNames(ctx context.Context, names []string) (map[string]string, error) {
+	result := map[string]string{}
+	if len(names) == 0 {
+		return result, nil
+	}
+	lower := make([]string, 0, len(names))
+	seen := map[string]struct{}{}
+	for _, n := range names {
+		k := strings.ToLower(strings.TrimSpace(n))
+		if k == "" {
+			continue
+		}
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		lower = append(lower, k)
+	}
+	if len(lower) == 0 {
+		return result, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT id::text, number, coalesce(name,'')
+		FROM rooms
+		WHERE lower(number) = ANY($1) OR lower(name) = ANY($1)`, lower)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, number, name string
+		if err := rows.Scan(&id, &number, &name); err != nil {
+			return nil, err
+		}
+		if k := strings.ToLower(number); k != "" {
+			if _, taken := result[k]; !taken {
+				result[k] = id
+			}
+		}
+		if k := strings.ToLower(name); k != "" {
+			if _, taken := result[k]; !taken {
+				result[k] = id
+			}
+		}
+	}
+	return result, rows.Err()
+}
+
 func (r *Repository) RoomNavigation(ctx context.Context, roomID string) (domain.RoomNavigation, error) {
 	room, err := r.GetRoom(ctx, roomID)
 	if err != nil {

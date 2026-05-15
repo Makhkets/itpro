@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from aioresponses import aioresponses
 
+from app.api.analytics import AnalyticsApi
 from app.api.client import ApiClient, ApiError, AuthRequired, Forbidden
 
 BASE = "http://api.test/api/v1"
@@ -70,3 +71,16 @@ async def test_query_params_drop_none(client):
     with aioresponses() as m:
         m.get(f"{BASE}/rooms?q=305", payload=[])
         await client.get("/rooms", params={"q": "305", "buildingId": None, "type": ""})
+
+
+async def test_attendance_students_404_uses_demo_data(client):
+    with aioresponses() as m:
+        m.get(
+            f"{BASE}/analytics/attendance/students?groupName=%D0%98%D0%A1%D0%98%D0%9F-21",
+            status=404,
+            payload={"error": {"message": "HTTP 404"}},
+        )
+        items = await AnalyticsApi(client).attendance_students("t", "ИСИП-21")
+    assert items
+    assert items[0]["student"]["groupName"] == "ИСИП-21"
+    assert items[-1]["admissionStatus"] == "not_admitted"

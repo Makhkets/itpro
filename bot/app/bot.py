@@ -11,6 +11,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from app.api import (
     AIApi,
+    AnalyticsApi,
     ApiClient,
     AuthApi,
     BookingsApi,
@@ -56,6 +57,7 @@ async def build_app(settings: Settings) -> AsyncIterator[tuple[Bot, Dispatcher]]
     dp["notifications_api"] = NotificationsApi(api_client)
     dp["faq_api"] = FaqApi(api_client)
     dp["ai_api"] = AIApi(api_client)
+    dp["analytics_api"] = AnalyticsApi(api_client)
     dp["library_api"] = LibraryApi(api_client)
     dp["privacy_api"] = PrivacyApi(api_client)
     dp["session_store"] = session_store

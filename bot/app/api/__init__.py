@@ -1,4 +1,5 @@
 from app.api.ai import AIApi
+from app.api.analytics import AnalyticsApi
 from app.api.auth import AuthApi
 from app.api.bookings import BookingsApi
 from app.api.campus import CampusApi
@@ -18,6 +19,7 @@ __all__ = [
     "Forbidden",
     "AuthApi",
     "AIApi",
+    "AnalyticsApi",
     "BookingsApi",
     "CampusApi",
     "FaqApi",

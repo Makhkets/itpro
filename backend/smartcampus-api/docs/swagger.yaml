@@ -1,72 +1,204 @@
 openapi: 3.0.3
 info:
-  title: SmartCampus MVP API
-  version: 1.0.0
-  description: Backend API for campus navigation, schedules, bookings, Telegram account linking data, AI assistant, attendance, library and analytics. The Telegram bot runtime is a separate Python service.
+  title: SmartCampus API
+  version: 1.1.0
+  description: |
+    Backend HTTP API for the SmartCampus platform (campus navigation, ISU schedule proxy, room bookings,
+    notifications, attendance, library, AI assistant, applicant FAQ, privacy and analytics).
+
+    ## Conventions
+    - Base URL: `/api/v1` (e.g. `http://localhost:8080/api/v1`).
+    - All request/response bodies are JSON (`application/json`).
+    - Field names use camelCase. Time fields are ISO-8601 with timezone (RFC 3339).
+    - Pagination params: `page` (1-based, default 1), `pageSize` (default 20, max 100).
+    - Time-window params: `from`, `to` (RFC 3339); defaults: `from = now-24h`, `to = now+7d`.
+    - Authentication: `Authorization: Bearer <JWT>` for all endpoints except those marked `security: []`.
+    - Error envelope: `{ "error": { "code", "message", "details" } }`.
+    - Role values: `student`, `teacher`, `applicant`, `librarian`, `admin`.
 servers:
   - url: http://localhost:8080/api/v1
+    description: Local dev
 security:
   - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Users
+  - name: Privacy
+  - name: Buildings
+  - name: Floors
+  - name: Rooms
+  - name: Navigation
+  - name: Schedule
+  - name: Bookings
+  - name: Notifications
+  - name: Telegram
+  - name: AI
+  - name: FAQ
+  - name: Attendance
+  - name: Library
+  - name: Analytics
+  - name: Audit
+  - name: Health
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    From:
+      name: from
+      in: query
+      required: false
+      schema: { type: string, format: date-time }
+      description: RFC 3339 lower bound (inclusive). Default = now-24h.
+    To:
+      name: to
+      in: query
+      required: false
+      schema: { type: string, format: date-time }
+      description: RFC 3339 upper bound (exclusive). Default = now+7d.
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Insufficient role or missing personal data consent
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Conflict (overlap, duplicate, wrong state)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Validation:
+      description: Validation error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
   schemas:
+    # ----------------------- Errors -----------------------
     Error:
       type: object
       properties:
         error:
           type: object
           properties:
-            code: { type: string }
+            code:
+              type: string
+              enum:
+                - VALIDATION_ERROR
+                - UNAUTHORIZED
+                - FORBIDDEN
+                - NOT_FOUND
+                - CONFLICT
+                - RATE_LIMITED
+                - BAD_REQUEST
+                - INTERNAL_ERROR
+                - AI_PROVIDER_UNAVAILABLE
             message: { type: string }
-            details: { type: object }
-    LoginRequest:
+            details:
+              nullable: true
+              description: Optional structured details (object/array/string)
+    OkResult:
       type: object
-      required: [email, password]
       properties:
-        email: { type: string, example: student@example.com }
-        password: { type: string, example: Student123! }
-    RegisterRequest:
-      type: object
-      required: [fullName, email, password, role]
-      properties:
-        fullName: { type: string }
-        email: { type: string }
-        password: { type: string, minLength: 8 }
-        role: { type: string, enum: [student, teacher, applicant, librarian, admin] }
-        groupName: { type: string }
-        department: { type: string }
+        ok: { type: boolean, example: true }
+
+    # ----------------------- Users / Auth -----------------------
     User:
       type: object
       properties:
         id: { type: string, format: uuid }
-        fullName: { type: string }
-        email: { type: string }
-        role: { type: string }
-        groupName: { type: string }
-        department: { type: string }
-        telegramChatId: { type: integer, format: int64, nullable: true }
-        telegramUsername: { type: string }
+        fullName: { type: string, example: Анна Орлова }
+        email: { type: string, format: email, example: anna@example.com }
+        role:
+          type: string
+          enum: [student, teacher, applicant, librarian, admin]
+        groupName: { type: string, example: ИСТ-25-2 }
+        department: { type: string, example: Институт прикладных информационных технологий }
+        telegramChatId:
+          type: integer
+          format: int64
+          nullable: true
+          example: 123456789
+        telegramUsername: { type: string, example: anna_orlova }
         isTelegramVerified: { type: boolean }
         personalDataConsent: { type: boolean }
         isActive: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-    AuthResult:
+    PublicUser:
       type: object
       properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string, example: Анна Орлова }
+        role: { type: string, example: student }
+        groupName: { type: string, example: ИСТ-25-2 }
+        department: { type: string }
+    RegisterRequest:
+      type: object
+      required: [fullName, email, password, role]
+      properties:
+        fullName: { type: string, minLength: 2, maxLength: 255 }
+        email: { type: string, format: email, maxLength: 255 }
+        password: { type: string, minLength: 8, example: Student123! }
+        role:
+          type: string
+          enum: [student, teacher, applicant, librarian, admin]
+          description: Admin registration may be disabled by env (`ALLOW_PUBLIC_ADMIN_REGISTER`).
+        groupName: { type: string }
+        department: { type: string }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: student@example.com }
+        password: { type: string, example: Student123! }
+    AuthResult:
+      type: object
+      required: [user, token]
+      properties:
         user: { $ref: '#/components/schemas/User' }
-        token: { type: string }
+        token:
+          type: string
+          description: JWT access token. Claims include `userId`, `email`, `role`, `groupName`, `personalDataConsent`.
+    TelegramUpdateRequest:
+      type: object
+      required: [chatId]
+      properties:
+        chatId: { type: integer, format: int64, example: 123456789 }
+        username: { type: string, example: student_user }
     PersonalDataConsentRequest:
       type: object
       required: [consent]
       properties:
         consent:
           type: boolean
-          description: Set to true when the user accepts personal data processing.
+          description: Set to true to accept personal data processing.
           example: true
     PersonalDataConsentResult:
       allOf:
@@ -76,26 +208,475 @@ components:
           properties:
             token:
               type: string
-              description: Fresh JWT with updated personalDataConsent claim. Telegram bot must replace the stored token with this value.
-    TelegramUpdateRequest:
+              description: |
+                Fresh JWT with the updated `personalDataConsent` claim. Telegram bot / frontend MUST replace
+                the stored token with this value to keep features (Telegram link, AI chat) unblocked.
+    PrivacyMeResult:
       type: object
-      required: [chatId]
       properties:
-        chatId: { type: integer, format: int64, example: 123456789 }
-        username: { type: string, example: student_user }
+        storedPersonalData:
+          type: array
+          items: { type: string }
+          example: [fullName, email, role, groupName, department, telegramChatId, telegramUsername, attendance, bookings, libraryLoans, aiChatMessages]
+        user: { $ref: '#/components/schemas/User' }
+
+    # ----------------------- Buildings / Floors -----------------------
+    Building:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Главный корпус }
+        code: { type: string, example: A }
+        address: { type: string }
+        description: { type: string }
+        latitude: { type: number, format: double, nullable: true, example: 43.319 }
+        longitude: { type: number, format: double, nullable: true, example: 45.690 }
+        isOldBuilding: { type: boolean }
+        navigationMode:
+          type: string
+          enum: [text, map, hybrid]
+          description: How the frontend should render navigation hints for rooms in this building.
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    BuildingUpsertRequest:
+      type: object
+      required: [name, code]
+      properties:
+        name: { type: string, example: Главный корпус }
+        code: { type: string, example: A }
+        address: { type: string }
+        description: { type: string }
+        latitude: { type: number, format: double, nullable: true }
+        longitude: { type: number, format: double, nullable: true }
+        isOldBuilding: { type: boolean }
+        navigationMode:
+          type: string
+          enum: [text, map, hybrid]
+          default: text
+    Floor:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        buildingId: { type: string, format: uuid }
+        number: { type: integer, example: 3 }
+        name: { type: string, example: 3 этаж }
+        mapImageUrl: { type: string, example: /static/floors/A-3.png }
+        description: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    FloorUpsertRequest:
+      type: object
+      required: [number]
+      properties:
+        number: { type: integer, example: 3 }
+        name: { type: string }
+        mapImageUrl: { type: string }
+        description: { type: string }
+
+    # ----------------------- Rooms / Navigation -----------------------
+    Room:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        buildingId: { type: string, format: uuid }
+        floorId: { type: string, format: uuid }
+        building: { $ref: '#/components/schemas/Building' }
+        floor: { $ref: '#/components/schemas/Floor' }
+        number: { type: string, example: A-305 }
+        name: { type: string, example: Лекционная 305 }
+        type:
+          type: string
+          enum: [lecture, computer_lab, coworking, meeting, office, library, lab, other]
+        capacity: { type: integer, example: 60 }
+        description: { type: string }
+        equipment:
+          type: array
+          items: { type: string }
+          example: [projector, whiteboard, wifi]
+        navigationHint: { type: string, example: От главного входа налево, 3 этаж, направо }
+        nearbyLandmarks: { type: string }
+        isBookable: { type: boolean }
+        isActive: { type: boolean }
+        xCoord: { type: integer, nullable: true }
+        yCoord: { type: integer, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    RoomUpsertRequest:
+      type: object
+      required: [buildingId, floorId, number]
+      properties:
+        buildingId: { type: string, format: uuid }
+        floorId: { type: string, format: uuid }
+        number: { type: string, example: A-305 }
+        name: { type: string }
+        type:
+          type: string
+          enum: [lecture, computer_lab, coworking, meeting, office, library, lab, other]
+          default: other
+        capacity: { type: integer, minimum: 0 }
+        description: { type: string }
+        equipment:
+          type: array
+          items: { type: string }
+        navigationHint: { type: string }
+        nearbyLandmarks: { type: string }
+        xCoord: { type: integer, nullable: true }
+        yCoord: { type: integer, nullable: true }
+    RoomNavigation:
+      type: object
+      properties:
+        building: { $ref: '#/components/schemas/Building' }
+        floor: { $ref: '#/components/schemas/Floor' }
+        room: { $ref: '#/components/schemas/Room' }
+        navigationHint: { type: string }
+        nearbyLandmarks: { type: string }
+        mapImageUrl: { type: string }
+        xCoord: { type: integer, nullable: true }
+        yCoord: { type: integer, nullable: true }
+    CampusRoute:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fromBuildingId: { type: string, format: uuid }
+        toBuildingId: { type: string, format: uuid }
+        fromBuilding: { $ref: '#/components/schemas/Building' }
+        toBuilding: { $ref: '#/components/schemas/Building' }
+        title: { type: string, example: A → B по переходу }
+        description: { type: string }
+        estimatedMinutes: { type: integer, example: 5 }
+        distanceMeters: { type: integer, nullable: true, example: 320 }
+        routeType:
+          type: string
+          enum: [walking, indoor, accessible]
+        accessibilityNotes: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CampusRouteUpsertRequest:
+      type: object
+      required: [fromBuildingId, toBuildingId, description, estimatedMinutes, routeType]
+      properties:
+        fromBuildingId: { type: string, format: uuid }
+        toBuildingId: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string }
+        estimatedMinutes: { type: integer, minimum: 0 }
+        distanceMeters: { type: integer, nullable: true }
+        routeType:
+          type: string
+          enum: [walking, indoor, accessible]
+        accessibilityNotes: { type: string }
+
+    # ----------------------- Schedule -----------------------
+    Schedule:
+      type: object
+      properties:
+        id:
+          type: string
+          description: |
+            UUID for legacy rows; for ISU-proxied entries has the form `isu-{entryId}-{YYYYMMDD}`.
+        roomId: { type: string, nullable: true, format: uuid }
+        roomNumber: { type: string }
+        room: { $ref: '#/components/schemas/Room' }
+        title: { type: string, example: Программирование (лекция) }
+        teacherId: { type: string }
+        teacherName: { type: string, example: Шабазов А.А. }
+        groupName: { type: string, example: ИСТ-25-2 }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        source:
+          type: string
+          enum: [manual, isu, sync, fallback]
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ScheduleCurrent:
+      type: object
+      properties:
+        now: { type: string, format: date-time }
+        currentLesson:
+          allOf: [{ $ref: '#/components/schemas/Schedule' }]
+          nullable: true
+        nextLesson:
+          allOf: [{ $ref: '#/components/schemas/Schedule' }]
+          nullable: true
+    TimeSlot:
+      type: object
+      properties:
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        title: { type: string }
+        source: { type: string, example: schedule }
+    RoomAvailability:
+      type: object
+      properties:
+        date: { type: string, example: "2026-05-15" }
+        workingFrom: { type: string, example: "08:00" }
+        workingTo: { type: string, example: "20:00" }
+        busySlots:
+          type: array
+          items: { $ref: '#/components/schemas/TimeSlot' }
+        freeSlots:
+          type: array
+          items: { $ref: '#/components/schemas/TimeSlot' }
+
+    # ----------------------- Bookings -----------------------
+    Booking:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        roomId: { type: string, format: uuid }
+        room: { $ref: '#/components/schemas/Room' }
+        requestedBy: { type: string, format: uuid }
+        title: { type: string, example: Командная встреча }
+        purpose: { type: string }
+        bookingType:
+          type: string
+          enum: [meeting, lecture, event, study, other]
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [pending, approved, rejected, cancelled]
+        adminComment: { type: string }
+        reviewedBy: { type: string, format: uuid }
+        reviewedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    BookingCreateRequest:
+      type: object
+      required: [roomId, title, startsAt, endsAt]
+      properties:
+        roomId: { type: string, format: uuid }
+        title: { type: string, example: Командная встреча }
+        purpose: { type: string }
+        bookingType:
+          type: string
+          enum: [meeting, lecture, event, study, other]
+          default: meeting
+        startsAt:
+          type: string
+          format: date-time
+          description: Must be in the future.
+        endsAt:
+          type: string
+          format: date-time
+          description: Must be after `startsAt`. Total duration ≤ 8 hours.
+    BookingDecisionRequest:
+      type: object
+      properties:
+        comment: { type: string, description: Admin comment shown to the requester. }
+
+    # ----------------------- Notifications -----------------------
+    Notification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        type:
+          type: string
+          example: booking_approved
+          description: e.g. `booking_approved`, `booking_rejected`, `booking_cancelled`, `attendance_marked`.
+        channel:
+          type: string
+          enum: [in_app, telegram, email]
+        title: { type: string }
+        message: { type: string }
+        isRead: { type: boolean }
+        isSent: { type: boolean }
+        sentAt: { type: string, format: date-time, nullable: true }
+        entityType: { type: string, example: booking }
+        entityId: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    # ----------------------- Telegram link -----------------------
     TelegramLinkStartResponse:
       type: object
       properties:
-        code: { type: string, example: "123456" }
+        code: { type: string, example: A1B2C3D4 }
         expiresIn: { type: string, example: 10m }
-        command: { type: string, example: "/link 123456" }
+        command: { type: string, example: "/link A1B2C3D4" }
     TelegramLinkVerifyRequest:
       type: object
       required: [code, chatId]
       properties:
-        code: { type: string, example: "123456" }
+        code: { type: string, example: A1B2C3D4 }
         chatId: { type: integer, format: int64, example: 123456789 }
         username: { type: string, example: student_user }
+
+    # ----------------------- AI -----------------------
+    AIChatRequest:
+      type: object
+      required: [message]
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          description: Omit to create a new session.
+        message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          example: Где аудитория A-305 и как добраться?
+    AISource:
+      type: object
+      properties:
+        type:
+          type: string
+          example: room
+          description: e.g. `room`, `schedule`, `library_book`, `applicant_faq`.
+        id: { type: string }
+        title: { type: string }
+    AIAnswer:
+      type: object
+      properties:
+        sessionId: { type: string, format: uuid }
+        answer: { type: string }
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/AISource' }
+    AIChatSession:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        title: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AIChatMessage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        sessionId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    # ----------------------- FAQ -----------------------
+    ApplicantFAQ:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        question: { type: string }
+        answer: { type: string }
+        category: { type: string, example: admission }
+        keywords:
+          type: array
+          items: { type: string }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ApplicantFAQUpsertRequest:
+      type: object
+      required: [question, answer]
+      properties:
+        question: { type: string }
+        answer: { type: string }
+        category: { type: string }
+        keywords:
+          type: array
+          items: { type: string }
+
+    # ----------------------- Attendance -----------------------
+    AttendanceSession:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        scheduleId: { type: string }
+        roomId: { type: string, format: uuid }
+        teacherId: { type: string, format: uuid }
+        title: { type: string }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    AttendanceSessionCreateRequest:
+      type: object
+      required: [roomId, title, startsAt, endsAt]
+      properties:
+        scheduleId: { type: string }
+        roomId: { type: string, format: uuid }
+        teacherId:
+          type: string
+          format: uuid
+          description: For teachers, auto-set to the current user; admin can override.
+        title: { type: string }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+    AttendanceRecord:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        attendanceSessionId: { type: string, format: uuid }
+        studentId: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [present, absent, late, excused]
+        markedBy: { type: string, format: uuid }
+        markedAt: { type: string, format: date-time }
+        comment: { type: string }
+    AttendanceRecordInput:
+      type: object
+      required: [studentId, status]
+      properties:
+        studentId: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [present, absent, late, excused]
+        comment: { type: string }
+    MarkAttendanceRequest:
+      type: object
+      required: [records]
+      properties:
+        records:
+          type: array
+          items: { $ref: '#/components/schemas/AttendanceRecordInput' }
+    AttendanceSummary:
+      type: object
+      properties:
+        totalRecords: { type: integer, example: 6 }
+        present: { type: integer, example: 4 }
+        absent: { type: integer, example: 1 }
+        late: { type: integer, example: 1 }
+        excused: { type: integer, example: 0 }
+        rate: { type: number, format: double, example: 0.8333 }
+    AttendancePolicy:
+      type: object
+      properties:
+        maxSemesterPoints: { type: integer, example: 80 }
+        admissionMinPoints: { type: integer, example: 60 }
+        requiredRate: { type: number, format: double, example: 0.75 }
+        requiredPercent: { type: number, format: double, example: 75 }
+        absencePenaltyPoints: { type: integer, example: 5 }
+        latePenaltyPoints: { type: integer, example: 2 }
+        excusedPenaltyPoints: { type: integer, example: 0 }
+        presentRewardPoints: { type: integer, example: 3 }
+        lateRewardPoints: { type: integer, example: 1 }
+        excusedRewardPoints: { type: integer, example: 2 }
+        admissionRule: { type: string }
+        notes:
+          type: array
+          items: { type: string }
+    StudentAttendanceAnalytics:
+      type: object
+      properties:
+        student: { $ref: '#/components/schemas/PublicUser' }
+        summary: { $ref: '#/components/schemas/AttendanceSummary' }
+        policy: { $ref: '#/components/schemas/AttendancePolicy' }
+        attendancePercent: { type: number, format: double, example: 83.3 }
+        currentPoints: { type: integer, example: 73 }
+        penaltyPoints: { type: integer, example: 7 }
+        rewardPoints: { type: integer, example: 13 }
+        pointsToAdmission: { type: integer, example: 0 }
+        admissionStatus:
+          type: string
+          enum: [no_data, admitted, attendance_risk, points_risk, not_admitted]
+        remainingAbsencesBeforeRisk: { type: integer, example: 2 }
+        recommendation: { type: string }
+
+    # ----------------------- Library -----------------------
     LibraryBook:
       type: object
       properties:
@@ -107,29 +688,43 @@ components:
         description: { type: string }
         totalCopies: { type: integer, example: 3 }
         availableCopies: { type: integer, example: 2 }
-        location: { type: string, example: "LIB-101, shelf SE-2" }
+        location: { type: string, example: LIB-101, shelf SE-2 }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     LibraryBookUpsertRequest:
       type: object
       required: [title, totalCopies, availableCopies]
       properties:
-        title: { type: string, example: Clean Code }
-        author: { type: string, example: Robert C. Martin }
-        isbn: { type: string, example: "9780132350884" }
-        category: { type: string, example: software }
+        title: { type: string }
+        author: { type: string }
+        isbn: { type: string }
+        category: { type: string }
         description: { type: string }
-        totalCopies: { type: integer, minimum: 0, example: 3 }
-        availableCopies: { type: integer, minimum: 0, example: 3 }
-        location: { type: string, example: "LIB-101, shelf SE-2" }
+        totalCopies: { type: integer, minimum: 0 }
+        availableCopies: { type: integer, minimum: 0 }
+        location: { type: string }
+    LibraryLoan:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        bookId: { type: string, format: uuid }
+        book: { $ref: '#/components/schemas/LibraryBook' }
+        userId: { type: string, format: uuid }
+        issuedBy: { type: string, format: uuid }
+        returnedBy: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [active, returned, overdue]
+        issuedAt: { type: string, format: date-time }
+        dueAt: { type: string, format: date-time }
+        returnedAt: { type: string, format: date-time, nullable: true }
     BorrowBookRequest:
       type: object
       properties:
         dueAt:
           type: string
           format: date-time
-          description: Optional due date. If omitted, backend sets it to 14 days from now.
-          example: "2026-06-01T00:00:00Z"
+          description: Optional. If omitted, backend uses `now + 14 days`. Must be in the future.
     LibraryLoanCreateRequest:
       type: object
       required: [bookId, userId]
@@ -139,71 +734,124 @@ components:
         dueAt:
           type: string
           format: date-time
-          description: Optional due date. If omitted, backend sets it to 14 days from now.
-          example: "2026-06-01T00:00:00Z"
-    LibraryLoan:
+          description: Optional. If omitted, backend uses `now + 14 days`. Must be in the future.
+    LibrarySummary:
       type: object
       properties:
-        id: { type: string, format: uuid }
-        bookId: { type: string, format: uuid }
-        book:
-          allOf:
-            - $ref: '#/components/schemas/LibraryBook'
-          description: Embedded book object is returned by borrow, list loans, my loans and return endpoints.
-        userId: { type: string, format: uuid }
-        issuedBy: { type: string, format: uuid }
-        returnedBy: { type: string, format: uuid }
-        status: { type: string, enum: [active, returned, overdue] }
-        issuedAt: { type: string, format: date-time }
-        dueAt: { type: string, format: date-time }
-        returnedAt: { type: string, format: date-time, nullable: true }
-    Room:
+        totalBooks: { type: integer }
+        availableCopies: { type: integer }
+        activeLoans: { type: integer }
+        overdueLoans: { type: integer }
+
+    # ----------------------- Analytics -----------------------
+    AnalyticsSummary:
       type: object
       properties:
-        id: { type: string, format: uuid }
-        buildingId: { type: string, format: uuid }
-        floorId: { type: string, format: uuid }
-        number: { type: string, example: A-305 }
-        type: { type: string, enum: [lecture, computer_lab, coworking, meeting, office, library, lab, other] }
-        capacity: { type: integer }
-        equipment:
-          type: array
-          items: { type: string }
-        navigationHint: { type: string }
-    Booking:
+        totalUsers: { type: integer }
+        totalBuildings: { type: integer }
+        totalRooms: { type: integer }
+        totalBookings: { type: integer }
+        pendingBookings: { type: integer }
+        approvedBookingsToday: { type: integer }
+        totalNotificationsSent: { type: integer }
+        totalAttendanceSessions: { type: integer }
+        averageAttendanceRate: { type: number, format: double }
+        totalBooks: { type: integer }
+        activeLibraryLoans: { type: integer }
+        aiQuestionsCount: { type: integer }
+        telegramMessagesCount: { type: integer }
+    BookingsByStatus:
+      type: object
+      additionalProperties:
+        type: integer
+      example:
+        pending: 3
+        approved: 12
+        rejected: 1
+        cancelled: 2
+    RoomUtilizationRow:
       type: object
       properties:
-        id: { type: string, format: uuid }
         roomId: { type: string, format: uuid }
-        title: { type: string }
-        purpose: { type: string }
-        bookingType: { type: string }
-        startsAt: { type: string, format: date-time }
-        endsAt: { type: string, format: date-time }
-        status: { type: string, enum: [pending, approved, rejected, cancelled] }
+        roomNumber: { type: string }
+        bookingsCount: { type: integer }
+        hoursBooked: { type: number, format: double }
+    TelegramSummary:
+      type: object
+      properties:
+        verifiedTelegramLinks: { type: integer }
+    AISummaryStats:
+      type: object
+      properties:
+        aiQuestionsCount: { type: integer }
+
+    # ----------------------- Audit -----------------------
+    AuditLog:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        action: { type: string, example: approve_booking }
+        entityType: { type: string, example: booking }
+        entityId: { type: string }
+        ipAddress: { type: string }
+        userAgent: { type: string }
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt: { type: string, format: date-time }
+
 paths:
+  # ============================================================
+  # Health
+  # ============================================================
   /health:
     get:
+      tags: [Health]
       security: []
       summary: Health check
       responses:
-        '200': { description: OK }
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  service: { type: string, example: SmartCampus MVP }
+
+  # ============================================================
+  # Auth
+  # ============================================================
   /auth/register:
     post:
+      tags: [Auth]
       security: []
-      summary: Register user
+      summary: Register a new user
+      description: |
+        Rate-limited per IP. Admin role requires `ALLOW_PUBLIC_ADMIN_REGISTER=true` env on the server.
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/RegisterRequest' }
       responses:
-        '201': { description: Created }
-        '400': { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResult' }
+        '400': { $ref: '#/components/responses/Validation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
   /auth/login:
     post:
+      tags: [Auth]
       security: []
-      summary: Login
+      summary: Login with email + password
+      description: Rate-limited per IP.
       requestBody:
         required: true
         content:
@@ -211,23 +859,33 @@ paths:
             schema: { $ref: '#/components/schemas/LoginRequest' }
       responses:
         '200':
-          description: Auth token
+          description: Auth token + user
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuthResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  # ============================================================
+  # Users / Privacy
+  # ============================================================
   /users/me:
     get:
-      summary: Current user
+      tags: [Users]
+      summary: Current authenticated user
       responses:
         '200':
-          description: Current user
+          description: User
           content:
             application/json:
               schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /users/me/telegram:
     patch:
-      summary: Update Telegram link fields
-      description: Requires personalDataConsent=true. Backend checks the current database value, not only the JWT claim.
+      tags: [Users]
+      summary: Update Telegram link fields on current user
+      description: |
+        Requires `personalDataConsent=true` (checked against DB, not just JWT claim).
       requestBody:
         required: true
         content:
@@ -239,11 +897,15 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/User' }
-        '403': { description: Personal data consent is required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /users/me/personal-data-consent:
     patch:
-      summary: Update personal data consent and issue fresh JWT
-      description: Telegram bot must replace the stored JWT with `token` from this response and update session user fields.
+      tags: [Users]
+      summary: Toggle personal data consent (issues fresh JWT)
+      description: |
+        Frontend MUST replace its stored JWT with `token` from the response, otherwise features that gate on
+        consent (Telegram link, AI chat) will keep returning 403.
       requestBody:
         required: true
         content:
@@ -251,231 +913,578 @@ paths:
             schema: { $ref: '#/components/schemas/PersonalDataConsentRequest' }
       responses:
         '200':
-          description: Updated user fields plus fresh JWT
+          description: Updated user with fresh token
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PersonalDataConsentResult' }
-        '400': { description: Invalid request body, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /privacy/me:
     get:
+      tags: [Privacy]
       summary: Stored personal data categories
       responses:
-        '200': { description: Privacy data }
+        '200':
+          description: List of stored data categories + the user object
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PrivacyMeResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /privacy/export:
     post:
-      summary: Export own personal data
+      tags: [Privacy]
+      summary: Export own personal data (GDPR-style)
       responses:
-        '200': { description: Export JSON }
+        '200':
+          description: Full export of user data (user fields + bookings, loans, attendance, AI sessions)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /privacy/delete-request:
     post:
-      summary: Create delete request audit event
+      tags: [Privacy]
+      summary: Create a personal data deletion request audit event
       responses:
-        '200': { description: Request created }
+        '200':
+          description: Request created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  status: { type: string, example: delete_request_created }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ============================================================
+  # Buildings / Floors
+  # ============================================================
   /buildings:
     get:
-      summary: List buildings
+      tags: [Buildings]
+      summary: List active buildings
       responses:
-        '200': { description: Buildings }
+        '200':
+          description: Buildings
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Building' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
     post:
-      summary: Create building
+      tags: [Buildings]
+      summary: Create building (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BuildingUpsertRequest' }
       responses:
-        '201': { description: Created }
+        '201':
+          description: Created building
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Building' }
+        '400': { $ref: '#/components/responses/Validation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /buildings/{id}:
     get:
-      summary: Get building
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      tags: [Buildings]
+      summary: Get building by ID
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
-        '200': { description: Building }
+        '200':
+          description: Building
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Building' }
+        '404': { $ref: '#/components/responses/NotFound' }
     patch:
-      summary: Update building
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      tags: [Buildings]
+      summary: Update building (admin only)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BuildingUpsertRequest' }
       responses:
-        '200': { description: Building }
-  /buildings/{buildingId}/floors:
+        '200':
+          description: Building
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Building' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /buildings/{id}/floors:
     get:
-      summary: List floors
-      parameters: [{ name: buildingId, in: path, required: true, schema: { type: string } }]
+      tags: [Floors]
+      summary: List floors of a building
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
-        '200': { description: Floors }
+        '200':
+          description: Floors (sorted by number ASC)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Floor' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
     post:
-      summary: Create floor
-      parameters: [{ name: buildingId, in: path, required: true, schema: { type: string } }]
+      tags: [Floors]
+      summary: Create floor (admin only)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FloorUpsertRequest' }
       responses:
-        '201': { description: Created }
-  /rooms/search:
-    get:
-      summary: Search rooms
-      parameters:
-        - { name: q, in: query, schema: { type: string } }
-        - { name: buildingId, in: query, schema: { type: string } }
-        - { name: type, in: query, schema: { type: string } }
-        - { name: equipment, in: query, schema: { type: string } }
-        - { name: capacityMin, in: query, schema: { type: integer } }
-      responses:
-        '200': { description: Rooms }
+        '201':
+          description: Created floor
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Floor' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ============================================================
+  # Rooms
+  # ============================================================
   /rooms:
     get:
-      summary: List rooms
+      tags: [Rooms]
+      summary: List active rooms
+      parameters:
+        - { name: buildingId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: floorId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: type, in: query, required: false, schema: { type: string } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
       responses:
-        '200': { description: Rooms }
+        '200':
+          description: Rooms
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Room' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
     post:
-      summary: Create room
+      tags: [Rooms]
+      summary: Create room (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoomUpsertRequest' }
       responses:
-        '201': { description: Created }
+        '201':
+          description: Created room
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Room' }
+        '400': { $ref: '#/components/responses/Validation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /rooms/search:
+    get:
+      tags: [Rooms]
+      summary: Search rooms (active only)
+      parameters:
+        - { name: q, in: query, required: false, schema: { type: string }, description: Substring match on room number/name and building name/code. }
+        - { name: buildingId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: type, in: query, required: false, schema: { type: string } }
+        - { name: equipment, in: query, required: false, schema: { type: string }, description: Single equipment tag, e.g. `projector`. }
+        - { name: capacityMin, in: query, required: false, schema: { type: integer, minimum: 0 } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Matching rooms
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Room' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /rooms/{id}:
     get:
-      summary: Get room
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      tags: [Rooms]
+      summary: Get room by ID
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
         '200':
           description: Room
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Room' }
+        '404': { $ref: '#/components/responses/NotFound' }
     patch:
-      summary: Update room
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      tags: [Rooms]
+      summary: Update room (admin only)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoomUpsertRequest' }
       responses:
-        '200': { description: Room }
+        '200':
+          description: Room
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Room' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /rooms/{id}/availability:
+    get:
+      tags: [Rooms]
+      summary: Free / busy slots for a working day (08:00–20:00 local)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - name: date
+          in: query
+          required: false
+          schema: { type: string, example: "2026-05-15" }
+          description: Date in `YYYY-MM-DD`. Defaults to today.
+      responses:
+        '200':
+          description: Availability for the day
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoomAvailability' }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /rooms/{id}/schedule:
+    get:
+      tags: [Schedule]
+      summary: Room schedule (proxied from ISU GSTOU)
+      description: |
+        Returns expanded schedule entries for a specific room. ISU has no per-room endpoint, so the caller
+        MUST pass `group` to scope the lookup; without it the response is an empty array. Each entry's `id`
+        has the form `isu-{entryId}-{YYYYMMDD}` and is NOT a UUID.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: group, in: query, required: false, schema: { type: string }, description: "Group name (e.g. ИСТ-25-2). Required for non-empty results." }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+      responses:
+        '200':
+          description: Schedule entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Schedule' }
+
+  # ============================================================
+  # Navigation
+  # ============================================================
   /navigation/room/{roomId}:
     get:
-      summary: Room navigation hint
-      parameters: [{ name: roomId, in: path, required: true, schema: { type: string } }]
+      tags: [Navigation]
+      summary: Resolve room navigation hint (building + floor + hint + map)
+      parameters: [{ name: roomId, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
-        '200': { description: Navigation }
+        '200':
+          description: Room navigation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoomNavigation' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /navigation/routes:
     get:
+      tags: [Navigation]
       summary: Building-to-building routes
+      parameters:
+        - { name: fromBuildingId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: toBuildingId, in: query, required: false, schema: { type: string, format: uuid } }
       responses:
-        '200': { description: Routes }
+        '200':
+          description: Routes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CampusRoute' }
     post:
-      summary: Create route
-      responses:
-        '201': { description: Created }
-  /navigation/routes/{id}:
-    patch:
-      summary: Update route
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: Route }
-  /rooms/{roomId}/schedule:
-    get:
-      summary: Room schedule
-      parameters: [{ name: roomId, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: Schedule }
-  /schedule/group/{groupName}:
-    get:
-      summary: Group schedule
-      parameters: [{ name: groupName, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: Schedule }
-  /schedule/teacher/{teacherId}:
-    get:
-      summary: Teacher schedule
-      parameters: [{ name: teacherId, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: Schedule }
-  /schedule/current:
-    get:
-      summary: Current and next lesson
-      responses:
-        '200': { description: Current schedule }
-  /schedules:
-    post:
-      summary: Create schedule
-      responses:
-        '201': { description: Created }
-  /schedules/{id}:
-    patch:
-      summary: Update schedule
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: Schedule }
-    delete:
-      summary: Delete schedule
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '204': { description: Deleted }
-  /rooms/{roomId}/availability:
-    get:
-      summary: Room availability
-      parameters: [{ name: roomId, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: Availability }
-  /bookings:
-    get:
-      summary: Admin list bookings
-      responses:
-        '200': { description: Bookings }
-    post:
-      summary: Create booking
+      tags: [Navigation]
+      summary: Create campus route (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CampusRouteUpsertRequest' }
       responses:
         '201':
+          description: Created route
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CampusRoute' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /navigation/routes/{id}:
+    patch:
+      tags: [Navigation]
+      summary: Update campus route (admin only)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CampusRouteUpsertRequest' }
+      responses:
+        '200':
+          description: Route
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CampusRoute' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ============================================================
+  # Schedule (ISU proxy)
+  # ============================================================
+  /schedule/group/{groupName}:
+    get:
+      tags: [Schedule]
+      summary: Group schedule (proxied from ISU GSTOU)
+      description: |
+        Fetches the group's timetable from `backend-isu.gstou.ru` and expands recurring ISU entries into
+        concrete date-times in `[from, to]`. Cached in Redis for 5 minutes. If ISU returns 404, response = `[]`.
+      parameters:
+        - { name: groupName, in: path, required: true, schema: { type: string }, description: "Group name (e.g. ИСТ-25-2). URL-encode UTF-8." }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+      responses:
+        '200':
+          description: Schedule
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Schedule' }
+  /schedule/teacher/{teacherId}:
+    get:
+      tags: [Schedule]
+      summary: Teacher schedule (proxied from ISU GSTOU)
+      description: |
+        ISU filters by substring against teacher name, so the path param accepts the teacher's surname or
+        full name (e.g. `Шабазов`), NOT a UUID. Legacy `teacherId` name kept for backward compatibility.
+      parameters:
+        - { name: teacherId, in: path, required: true, schema: { type: string }, description: Teacher surname or full name (URL-encoded UTF-8). }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+      responses:
+        '200':
+          description: Schedule
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Schedule' }
+  /schedule/current:
+    get:
+      tags: [Schedule]
+      summary: Current + next lesson for a group
+      description: |
+        Group is taken from `groupName` query param; if absent, falls back to the user's group from the JWT.
+        Returns `{ now, currentLesson: null, nextLesson: null }` if no group is available.
+      parameters:
+        - { name: groupName, in: query, required: false, schema: { type: string } }
+      responses:
+        '200':
+          description: Current schedule
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScheduleCurrent' }
+
+  # ============================================================
+  # Bookings
+  # ============================================================
+  /bookings:
+    get:
+      tags: [Bookings]
+      summary: List bookings (admin only)
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [pending, approved, rejected, cancelled] } }
+        - { name: roomId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Booking' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Bookings]
+      summary: Create a booking
+      description: |
+        - `startsAt` must be in the future.
+        - `endsAt` must be after `startsAt`; total duration ≤ 8 hours.
+        - Room must be active and bookable.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BookingCreateRequest' }
+      responses:
+        '201':
+          description: Booking created (status `pending`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /bookings/my:
+    get:
+      tags: [Bookings]
+      summary: List own bookings
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [pending, approved, rejected, cancelled] } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Own bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Booking' }
+  /bookings/{id}:
+    get:
+      tags: [Bookings]
+      summary: Get booking by ID (own booking or admin)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
           description: Booking
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Booking' }
-  /bookings/my:
-    get:
-      summary: My bookings
-      responses:
-        '200': { description: Bookings }
-  /bookings/{id}:
-    get:
-      summary: Get booking
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: Booking }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /bookings/{id}/approve:
     patch:
-      summary: Approve booking
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: Booking approved }
-        '409': { description: Conflict }
-  /bookings/{id}/reject:
-    patch:
-      summary: Reject booking
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: Booking rejected }
-  /bookings/{id}/cancel:
-    patch:
-      summary: Cancel own pending booking
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: Booking cancelled }
-  /notifications:
-    get:
-      summary: List own notifications
-      responses:
-        '200': { description: Notifications }
-  /notifications/{id}/read:
-    patch:
-      summary: Mark notification read
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: OK }
-  /notifications/read-all:
-    patch:
-      summary: Mark all notifications read
-      responses:
-        '200': { description: OK }
-  /telegram/link/start:
-    post:
-      summary: Create Telegram verification code
-      description: Requires personalDataConsent=true. Use after login to start linking a Telegram chat.
+      tags: [Bookings]
+      summary: Approve a pending booking (admin only)
+      description: |
+        Returns 409 if the booking overlaps with another approved booking or with the schedule for the room.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BookingDecisionRequest' }
       responses:
         '200':
-          description: Verification code and /link command
+          description: Booking approved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /bookings/{id}/reject:
+    patch:
+      tags: [Bookings]
+      summary: Reject a pending booking (admin only)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BookingDecisionRequest' }
+      responses:
+        '200':
+          description: Booking rejected
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /bookings/{id}/cancel:
+    patch:
+      tags: [Bookings]
+      summary: Cancel own pending booking
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: Booking cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # ============================================================
+  # Notifications
+  # ============================================================
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List own notifications
+      parameters:
+        - { name: unreadOnly, in: query, required: false, schema: { type: boolean }, description: "When `true`, only unread notifications." }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Notification' }
+  /notifications/{id}/read:
+    patch:
+      tags: [Notifications]
+      summary: Mark notification as read
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /notifications/read-all:
+    patch:
+      tags: [Notifications]
+      summary: Mark all own notifications as read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResult' }
+
+  # ============================================================
+  # Telegram link
+  # ============================================================
+  /telegram/link/start:
+    post:
+      tags: [Telegram]
+      summary: Issue a 10-minute Telegram verification code
+      description: Requires `personalDataConsent=true` (checked against DB).
+      responses:
+        '200':
+          description: Verification payload
           content:
             application/json:
               schema: { $ref: '#/components/schemas/TelegramLinkStartResponse' }
-        '403': { description: Personal data consent is required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /telegram/link/verify:
     post:
-      summary: Verify Telegram link
+      tags: [Telegram]
+      summary: Confirm Telegram link with previously issued code
       requestBody:
         required: true
         content:
@@ -487,92 +1496,282 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/User' }
-        '400': { description: Invalid request body, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '403': { description: Verification code belongs to another user, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ============================================================
+  # AI assistant
+  # ============================================================
   /ai/chat:
     post:
-      summary: AI assistant chat
-      responses:
-        '200': { description: AI answer }
-  /ai/sessions:
-    get:
-      summary: List AI sessions
-      responses:
-        '200': { description: Sessions }
-  /ai/sessions/{id}/messages:
-    get:
-      summary: AI session messages
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: Messages }
-  /ai/sessions/{id}:
-    delete:
-      summary: Delete AI session
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '204': { description: Deleted }
-  /applicant-faq:
-    get:
-      security: []
-      summary: List applicant FAQ
-      responses:
-        '200': { description: FAQ }
-    post:
-      summary: Create FAQ
-      responses:
-        '201': { description: Created }
-  /applicant-faq/search:
-    get:
-      security: []
-      summary: Search applicant FAQ
-      responses:
-        '200': { description: FAQ }
-  /applicant-faq/{id}:
-    patch:
-      summary: Update FAQ
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: FAQ }
-    delete:
-      summary: Delete FAQ
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '204': { description: Deleted }
-  /attendance/sessions:
-    get:
-      summary: List attendance sessions
-      responses:
-        '200': { description: Sessions }
-    post:
-      summary: Create attendance session
-      responses:
-        '201': { description: Created }
-  /attendance/sessions/{id}/records:
-    get:
-      summary: List attendance records
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: Records }
-    post:
-      summary: Mark attendance
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses:
-        '200': { description: Records }
-  /attendance/my:
-    get:
-      summary: Student own attendance
-      responses:
-        '200': { description: Records }
-  /library/books/search:
-    get:
-      summary: Search library books
-      parameters:
-        - { name: q, in: query, required: false, schema: { type: string }, description: Search in title and description }
-        - { name: author, in: query, required: false, schema: { type: string }, description: Case-insensitive author filter }
-        - { name: category, in: query, required: false, schema: { type: string }, description: Exact category filter }
+      tags: [AI]
+      summary: Chat with the SmartCampus AI assistant
+      description: |
+        Rate-limited per user. Requires `personalDataConsent=true`.
+        - Omit `sessionId` to create a new session (title = first 80 chars of message).
+        - Backend masks PII in both inbound and outbound text.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AIChatRequest' }
       responses:
         '200':
-          description: Books
+          description: Assistant answer
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AIAnswer' }
+        '400': { $ref: '#/components/responses/Validation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '502':
+          description: Upstream AI provider unavailable
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /ai/sessions:
+    get:
+      tags: [AI]
+      summary: List own AI chat sessions
+      responses:
+        '200':
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AIChatSession' }
+  /ai/sessions/{id}/messages:
+    get:
+      tags: [AI]
+      summary: List messages of own AI session
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AIChatMessage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /ai/sessions/{id}:
+    delete:
+      tags: [AI]
+      summary: Delete own AI session
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ============================================================
+  # Applicant FAQ
+  # ============================================================
+  /applicant-faq:
+    get:
+      tags: [FAQ]
+      security: []
+      summary: Public list of active FAQ entries
+      responses:
+        '200':
+          description: FAQ
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ApplicantFAQ' }
+    post:
+      tags: [FAQ]
+      summary: Create FAQ entry (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApplicantFAQUpsertRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApplicantFAQ' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /applicant-faq/search:
+    get:
+      tags: [FAQ]
+      security: []
+      summary: Public FAQ full-text search
+      parameters:
+        - { name: q, in: query, required: false, schema: { type: string }, description: Substring match on question/answer/category/keywords. }
+      responses:
+        '200':
+          description: FAQ (top 10)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ApplicantFAQ' }
+  /applicant-faq/{id}:
+    patch:
+      tags: [FAQ]
+      summary: Update FAQ entry (admin only)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApplicantFAQUpsertRequest' }
+      responses:
+        '200':
+          description: FAQ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApplicantFAQ' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [FAQ]
+      summary: Delete FAQ entry (admin only)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '204': { description: Deleted }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ============================================================
+  # Attendance
+  # ============================================================
+  /attendance/policy:
+    get:
+      tags: [Attendance]
+      summary: Demo attendance/admission policy
+      responses:
+        '200':
+          description: Policy
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendancePolicy' }
+  /attendance/sessions:
+    get:
+      tags: [Attendance]
+      summary: List attendance sessions (teacher/admin)
+      parameters:
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+      responses:
+        '200':
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AttendanceSession' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Attendance]
+      summary: Create attendance session (teacher/admin)
+      description: For teachers, `teacherId` is forced to the current user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AttendanceSessionCreateRequest' }
+      responses:
+        '201':
+          description: Created session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceSession' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /attendance/sessions/{id}/records:
+    get:
+      tags: [Attendance]
+      summary: List records for a session (teacher/admin)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: Records
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AttendanceRecord' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Attendance]
+      summary: Mark attendance (upsert records) (teacher/admin)
+      description: Teachers can only mark sessions they own.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MarkAttendanceRequest' }
+      responses:
+        '200':
+          description: Upserted records
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AttendanceRecord' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /attendance/my:
+    get:
+      tags: [Attendance]
+      summary: Own attendance records (students)
+      responses:
+        '200':
+          description: Records
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AttendanceRecord' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /attendance/my/analytics:
+    get:
+      tags: [Attendance]
+      summary: Own attendance analytics (students)
+      responses:
+        '200':
+          description: Attendance percent, penalties, points, admission forecast
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentAttendanceAnalytics' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ============================================================
+  # Library
+  # ============================================================
+  /library/books:
+    post:
+      tags: [Library]
+      summary: Create a book (librarian/admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LibraryBookUpsertRequest' }
+      responses:
+        '201':
+          description: Created book
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LibraryBook' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /library/books/search:
+    get:
+      tags: [Library]
+      summary: Search library books
+      parameters:
+        - { name: q, in: query, required: false, schema: { type: string }, description: Substring match in title and description. }
+        - { name: author, in: query, required: false, schema: { type: string }, description: Case-insensitive author filter. }
+        - { name: category, in: query, required: false, schema: { type: string }, description: Exact category match. }
+      responses:
+        '200':
+          description: Books (max 50)
           content:
             application/json:
               schema:
@@ -580,7 +1779,8 @@ paths:
                 items: { $ref: '#/components/schemas/LibraryBook' }
   /library/books/{id}:
     get:
-      summary: Get book
+      tags: [Library]
+      summary: Get book by ID
       parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
         '200':
@@ -588,10 +1788,10 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LibraryBook' }
-        '404': { description: Book not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
     patch:
-      summary: Update book
-      description: Librarian/admin only.
+      tags: [Library]
+      summary: Update a book (librarian/admin)
       parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       requestBody:
         required: true
@@ -604,12 +1804,15 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LibraryBook' }
-        '403': { description: Librarian or admin role required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '404': { description: Book not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /library/books/{id}/borrow:
     post:
-      summary: Borrow book as current student or teacher
-      description: Creates an active loan for the current user. If dueAt is omitted, backend sets dueAt to 14 days from now. Returns 409 if there are no available copies or the user already has an active loan for this book.
+      tags: [Library]
+      summary: Borrow a book as current student/teacher
+      description: |
+        Creates an active loan for the current user. If `dueAt` is omitted, defaults to `now + 14 days`.
+        Returns 409 if no available copies or the user already has an active loan for this book.
       parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       requestBody:
         required: false
@@ -622,44 +1825,28 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LibraryLoan' }
-        '400': { description: Invalid dueAt or request body, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '403': { description: Student or teacher role required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '404': { description: Book not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '409': { description: No available copies or duplicate active loan, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-  /library/books:
-    post:
-      summary: Create book
-      description: Librarian/admin only.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/LibraryBookUpsertRequest' }
-      responses:
-        '201':
-          description: Created book
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/LibraryBook' }
-        '403': { description: Librarian or admin role required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /library/loans:
     get:
-      summary: List loans
-      description: Librarian/admin only. Returned loan objects include embedded `book`.
+      tags: [Library]
+      summary: List loans (librarian/admin)
       parameters:
         - { name: status, in: query, required: false, schema: { type: string, enum: [active, returned, overdue] } }
       responses:
         '200':
-          description: Loans
+          description: Loans (with embedded `book`)
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/LibraryLoan' }
-        '403': { description: Librarian or admin role required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
     post:
-      summary: Create loan
-      description: Librarian/admin only. Creates a loan for the selected user. If dueAt is omitted, backend sets dueAt to 14 days from now.
+      tags: [Library]
+      summary: Create a loan for a user (librarian/admin)
       requestBody:
         required: true
         content:
@@ -671,85 +1858,179 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LibraryLoan' }
-        '400': { description: Invalid request body, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '403': { description: Librarian or admin role required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '404': { description: Book or user not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '409': { description: No available copies or duplicate active loan, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /library/loans/my:
     get:
-      summary: My library loans
-      description: Student/teacher only. Returned loan objects include embedded `book`, so bot can render title, author, dueAt and status without extra book requests.
+      tags: [Library]
+      summary: Own loans (student/teacher)
       responses:
         '200':
-          description: Own loans
+          description: Own loans (with embedded `book`)
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/LibraryLoan' }
-        '403': { description: Student or teacher role required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /library/loans/{id}/return:
     patch:
-      summary: Return loan
-      description: Librarian/admin only. Returns a loan and increments available copies.
+      tags: [Library]
+      summary: Return a loan (librarian/admin)
       parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
         '200':
-          description: Returned loan with embedded book
+          description: Returned loan (with embedded `book`)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LibraryLoan' }
-        '403': { description: Librarian or admin role required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '404': { description: Loan not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '409': { description: Loan is already returned, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # ============================================================
+  # Analytics (admin/teacher/librarian)
+  # ============================================================
   /analytics/summary:
     get:
+      tags: [Analytics]
       summary: Admin analytics summary
       responses:
-        '200': { description: Summary }
+        '200':
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnalyticsSummary' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /analytics/bookings-by-status:
     get:
-      summary: Booking status counters
+      tags: [Analytics]
+      summary: Booking counters keyed by status (admin)
       responses:
-        '200': { description: Counters }
+        '200':
+          description: Counters
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BookingsByStatus' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /analytics/room-utilization:
     get:
-      summary: Room utilization
+      tags: [Analytics]
+      summary: Room utilization (admin)
       responses:
-        '200': { description: Utilization }
+        '200':
+          description: Utilization rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RoomUtilizationRow' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /analytics/attendance/summary:
     get:
-      summary: Attendance summary
+      tags: [Analytics]
+      summary: Attendance summary across all groups (admin)
       responses:
-        '200': { description: Summary }
+        '200':
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceSummary' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /analytics/attendance/by-group:
     get:
-      summary: Attendance by group
+      tags: [Analytics]
+      summary: Attendance summary for a group (teacher/admin)
+      parameters:
+        - { name: groupName, in: query, required: false, schema: { type: string } }
       responses:
-        '200': { description: Summary }
+        '200':
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceSummary' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /analytics/attendance/students:
+    get:
+      tags: [Analytics]
+      summary: Per-student attendance analytics (teacher/admin)
+      parameters:
+        - { name: groupName, in: query, required: false, schema: { type: string }, description: Optional group filter. }
+      responses:
+        '200':
+          description: Analytics rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StudentAttendanceAnalytics' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /analytics/attendance/by-student/{studentId}:
     get:
-      summary: Attendance by student
-      parameters: [{ name: studentId, in: path, required: true, schema: { type: string } }]
+      tags: [Analytics]
+      summary: Single student's attendance analytics
+      description: Admin/teacher can read any; student can read only own (otherwise 403).
+      parameters: [{ name: studentId, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
-        '200': { description: Summary }
+        '200':
+          description: Analytics
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentAttendanceAnalytics' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /analytics/library/summary:
     get:
-      summary: Library summary
+      tags: [Analytics]
+      summary: Library summary (librarian/admin)
       responses:
-        '200': { description: Summary }
+        '200':
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LibrarySummary' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /analytics/telegram/summary:
     get:
-      summary: Telegram summary
+      tags: [Analytics]
+      summary: Telegram link counter (admin)
       responses:
-        '200': { description: Summary }
+        '200':
+          description: Counter
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TelegramSummary' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /analytics/ai/summary:
     get:
-      summary: AI usage summary
+      tags: [Analytics]
+      summary: AI usage counter (admin)
       responses:
-        '200': { description: Summary }
+        '200':
+          description: Counter
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AISummaryStats' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ============================================================
+  # Audit
+  # ============================================================
   /audit-logs:
     get:
+      tags: [Audit]
       summary: Admin audit log list
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
       responses:
-        '200': { description: Audit logs }
+        '200':
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AuditLog' }
+        '403': { $ref: '#/components/responses/Forbidden' }

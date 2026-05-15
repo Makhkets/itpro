@@ -265,10 +265,26 @@ Response:
 
 Statuses: `present`, `absent`, `late`, `excused`.
 
+`GET /attendance/policy` any authenticated user:
+
+```json
+{
+  "maxSemesterPoints": 80,
+  "admissionMinPoints": 60,
+  "requiredPercent": 75,
+  "absencePenaltyPoints": 5,
+  "latePenaltyPoints": 2
+}
+```
+
 `GET /attendance/my` student  
+`GET /attendance/my/analytics` student  
 `GET /analytics/attendance/summary` admin  
 `GET /analytics/attendance/by-group?groupName=ИСП-21` teacher/admin  
-`GET /analytics/attendance/by-student/{studentId}` admin/teacher or same student.
+`GET /analytics/attendance/students?groupName=ИСП-21` teacher/admin  
+`GET /analytics/attendance/by-student/{studentId}` admin/teacher or same student.  
+
+Analytics response includes `attendancePercent`, `currentPoints`, `penaltyPoints`, `pointsToAdmission`, `admissionStatus`, `remainingAbsencesBeforeRisk`, `summary`, `policy` and public student data.
 
 ## Library
 

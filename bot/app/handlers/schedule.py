@@ -102,8 +102,8 @@ async def cb_current(cb: CallbackQuery, schedule_api: ScheduleApi, session: User
         await handle_api_error(cb, e)
         return
 
-    current = data.get("current") if isinstance(data, dict) else None
-    nxt = data.get("next") if isinstance(data, dict) else None
+    current = data.get("currentLesson") if isinstance(data, dict) else None
+    nxt = data.get("nextLesson") if isinstance(data, dict) else None
 
     lines = ["⏰ <b>Сейчас и далее</b>", ""]
     if current:

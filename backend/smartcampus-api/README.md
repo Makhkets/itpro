@@ -79,8 +79,9 @@ make seed
 8. Создается in-app notification; внешний Telegram bot может показать ее пользователю через API.
 9. Student задает вопрос `/api/v1/ai/chat`: "Где сегодня у группы ИСП-21 пары?"
 10. Applicant пишет внешнему Telegram bot вопрос про документы; bot ищет ответ через `/api/v1/applicant-faq/search`.
-11. Admin смотрит `/api/v1/analytics/attendance/summary`.
-12. Student ищет книгу через `/api/v1/library/books/search`, берет ее через `/api/v1/library/books/{id}/borrow`, затем видит ее в `/api/v1/library/loans/my`.
+11. Student смотрит `/api/v1/attendance/my/analytics`: процент посещаемости, штрафы за пропуски, баллы и прогноз допуска.
+12. Admin смотрит `/api/v1/analytics/attendance/summary` и `/api/v1/analytics/attendance/students`.
+13. Student ищет книгу через `/api/v1/library/books/search`, берет ее через `/api/v1/library/books/{id}/borrow`, затем видит ее в `/api/v1/library/loans/my`.
 
 ## Безопасность персональных данных
 

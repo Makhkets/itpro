@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"strings"
 
 	"github.com/smartcampus/smartcampus-api/internal/domain"
 )
@@ -19,12 +20,23 @@ type RouteParams struct {
 }
 
 func (r *Repository) GetRoutes(ctx context.Context, fromBuildingID, toBuildingID string) ([]domain.CampusRoute, error) {
-	rows, err := r.pool.Query(ctx, `
+	where := []string{"TRUE"}
+	args := []any{}
+	if fromBuildingID != "" {
+		where, args = appendWhere(where, args, "from_building_id=$%d", fromBuildingID)
+	}
+	if toBuildingID != "" {
+		where, args = appendWhere(where, args, "to_building_id=$%d", toBuildingID)
+	}
+
+	query := `
 		SELECT id::text, from_building_id::text, to_building_id::text, title, description,
 		       estimated_minutes, distance_meters, route_type, accessibility_notes, created_at, updated_at
 		FROM campus_routes
-		WHERE ($1='' OR from_building_id=$1) AND ($2='' OR to_building_id=$2)
-		ORDER BY title`, fromBuildingID, toBuildingID)
+		WHERE ` + strings.Join(where, " AND ") + `
+		ORDER BY title`
+	// #nosec G202 -- SQL fragments are static; user values are bound as parameters.
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

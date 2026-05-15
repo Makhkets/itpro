@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 from app.api.campus import _as_list
 from app.api.client import ApiClient
@@ -31,8 +32,9 @@ class ScheduleApi:
         from_: str | None = None,
         to: str | None = None,
     ) -> list[dict[str, Any]]:
+        group_path = quote(group_name.strip(), safe="")
         data = await self._client.get(
-            f"/schedule/group/{group_name}",
+            f"/schedule/group/{group_path}",
             token=token,
             params={"from": from_, "to": to},
         )
@@ -45,8 +47,9 @@ class ScheduleApi:
         from_: str | None = None,
         to: str | None = None,
     ) -> list[dict[str, Any]]:
+        teacher_path = quote(teacher_id.strip(), safe="")
         data = await self._client.get(
-            f"/schedule/teacher/{teacher_id}",
+            f"/schedule/teacher/{teacher_path}",
             token=token,
             params={"from": from_, "to": to},
         )

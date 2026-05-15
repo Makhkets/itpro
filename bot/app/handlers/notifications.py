@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from aiogram import F, Router
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.api import NotificationsApi
 from app.handlers._helpers import handle_api_error, safe_edit
-from app.keyboards.common import back_home_kb, login_required_kb
+from app.keyboards.common import back_home_kb, login_required_kb, styled_button
 from app.services.message_format import notification_card, success_text
 from app.services.session_store import UserSession
 
@@ -21,19 +21,20 @@ def _list_kb(items: list[dict], unread_only: bool) -> InlineKeyboardMarkup:
             title = title[:37] + "…"
         icon = "📭" if n.get("isRead") or n.get("read") else "📬"
         kb.row(
-            InlineKeyboardButton(
-                text=f"{icon} {title}",
+            styled_button(
+                f"{icon} {title}",
                 callback_data=f"notif:read:{n.get('id')}",
+                style="success" if icon == "📬" else None,
             )
         )
     kb.row(
-        InlineKeyboardButton(
-            text="📖 Только непрочитанные" if not unread_only else "📋 Все",
+        styled_button(
+            "📖 Только непрочитанные" if not unread_only else "📋 Все",
             callback_data=f"notif:toggle:{'all' if unread_only else 'unread'}",
         ),
-        InlineKeyboardButton(text="✅ Прочитать все", callback_data="notif:read_all"),
+        styled_button("✅ Прочитать все", callback_data="notif:read_all", style="success"),
     )
-    kb.row(InlineKeyboardButton(text="🏠 Главное меню", callback_data="menu:home"))
+    kb.row(styled_button("🏠 Главное меню", callback_data="menu:home"))
     return kb.as_markup()
 
 

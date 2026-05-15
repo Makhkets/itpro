@@ -22,5 +22,5 @@ func main() {
 	if err := db.RunMigrations(ctx, pool, "internal/db/migrations"); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("demo seed data is applied by migrations 017_seed_demo_data.sql and 018_seed_library_books.sql")
+	fmt.Println("demo seed data is applied by migrations 017_seed_demo_data.sql, 018_seed_library_books.sql and 019_seed_attendance_analytics_demo.sql")
 }

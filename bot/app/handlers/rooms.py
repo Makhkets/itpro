@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, Message
 
 from app.api import CampusApi, RoomsApi, ScheduleApi
 from app.handlers._helpers import handle_api_error, safe_edit
-from app.keyboards.common import back_home_kb, login_required_kb
+from app.keyboards.common import back_home_kb, login_required_kb, styled_button
 from app.keyboards.rooms import room_detail_kb, rooms_list_kb
 from app.services.message_format import (
     esc,
@@ -122,13 +122,12 @@ async def cb_room_nav(cb: CallbackQuery, campus_api: CampusApi, session: UserSes
             else:
                 lines.append(f"• {esc(lm)}")
 
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
     from aiogram.utils.keyboard import InlineKeyboardBuilder
 
     kb = InlineKeyboardBuilder()
     kb.row(
-        InlineKeyboardButton(text="⬅️ К аудитории", callback_data=f"rooms:view:{room_id}"),
-        InlineKeyboardButton(text="🏠 Главное меню", callback_data="menu:home"),
+        styled_button("⬅️ К аудитории", callback_data=f"rooms:view:{room_id}"),
+        styled_button("🏠 Главное меню", callback_data="menu:home"),
     )
     await safe_edit(cb, "\n".join(lines), kb.as_markup())
 
@@ -143,13 +142,17 @@ async def cb_room_schedule(cb: CallbackQuery, schedule_api: ScheduleApi, session
         return
 
     if not items:
-        from aiogram.types import InlineKeyboardButton
         from aiogram.utils.keyboard import InlineKeyboardBuilder
 
         kb = InlineKeyboardBuilder()
-        kb.row(InlineKeyboardButton(text="⬅️ К аудитории", callback_data=f"rooms:view:{room_id}"))
-        kb.row(InlineKeyboardButton(text="🏠 Главное меню", callback_data="menu:home"))
-        await safe_edit(cb, "🔵 Занятий не запланировано.", kb.as_markup())
+        kb.row(styled_button("🔎 Расписание группы", callback_data="schedule:group", style="standard"))
+        kb.row(styled_button("⬅️ К аудитории", callback_data=f"rooms:view:{room_id}"))
+        kb.row(styled_button("🏠 Главное меню", callback_data="menu:home"))
+        await safe_edit(
+            cb,
+            "🔵 Расписание по аудитории недоступно. Источник (ИСУ ГГНТУ) не позволяет искать по комнате — посмотрите расписание группы.",
+            kb.as_markup(),
+        )
         return
 
     lines = ["📅 <b>Расписание аудитории</b>"]
@@ -157,12 +160,11 @@ async def cb_room_schedule(cb: CallbackQuery, schedule_api: ScheduleApi, session
         lines.append("")
         lines.append(schedule_item(s))
 
-    from aiogram.types import InlineKeyboardButton
     from aiogram.utils.keyboard import InlineKeyboardBuilder
 
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="⬅️ К аудитории", callback_data=f"rooms:view:{room_id}"))
-    kb.row(InlineKeyboardButton(text="🏠 Главное меню", callback_data="menu:home"))
+    kb.row(styled_button("⬅️ К аудитории", callback_data=f"rooms:view:{room_id}"))
+    kb.row(styled_button("🏠 Главное меню", callback_data="menu:home"))
     await safe_edit(cb, "\n".join(lines), kb.as_markup())
 
 
@@ -181,12 +183,13 @@ async def cb_room_avail(cb: CallbackQuery, rooms_api: RoomsApi, session: UserSes
 
     slots = data.get("slots") or data.get("availability") or []
     if not slots:
-        from aiogram.types import InlineKeyboardButton
         from aiogram.utils.keyboard import InlineKeyboardBuilder
 
         kb = InlineKeyboardBuilder()
-        kb.row(InlineKeyboardButton(text="📌 Забронировать", callback_data=f"rooms:book:{room_id}"))
-        kb.row(InlineKeyboardButton(text="⬅️ К аудитории", callback_data=f"rooms:view:{room_id}"))
+        kb.row(
+            styled_button("📌 Забронировать", callback_data=f"rooms:book:{room_id}", style="success")
+        )
+        kb.row(styled_button("⬅️ К аудитории", callback_data=f"rooms:view:{room_id}"))
         await safe_edit(cb, "🔵 Свободных окон нет.", kb.as_markup())
         return
 
@@ -197,10 +200,9 @@ async def cb_room_avail(cb: CallbackQuery, rooms_api: RoomsApi, session: UserSes
         emoji = "🟢" if s.get("available", True) else "🔴"
         lines.append(f"{emoji} {start} — {end}")
 
-    from aiogram.types import InlineKeyboardButton
     from aiogram.utils.keyboard import InlineKeyboardBuilder
 
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="📌 Забронировать", callback_data=f"rooms:book:{room_id}"))
-    kb.row(InlineKeyboardButton(text="⬅️ К аудитории", callback_data=f"rooms:view:{room_id}"))
+    kb.row(styled_button("📌 Забронировать", callback_data=f"rooms:book:{room_id}", style="success"))
+    kb.row(styled_button("⬅️ К аудитории", callback_data=f"rooms:view:{room_id}"))
     await safe_edit(cb, "\n".join(lines), kb.as_markup())

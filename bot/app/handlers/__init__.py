@@ -2,6 +2,7 @@ from aiogram import Router
 
 from app.handlers import (
     ai,
+    analytics,
     auth,
     bookings,
     campus,
@@ -28,6 +29,7 @@ def build_root_router() -> Router:
     root.include_router(bookings.router)
     root.include_router(faq.router)
     root.include_router(ai.router)
+    root.include_router(analytics.router)
     root.include_router(library.router)
     root.include_router(notifications.router)
     root.include_router(profile.router)
