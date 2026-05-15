@@ -25,12 +25,14 @@ import (
 )
 
 type Service struct {
-	repo  *repository.Repository
-	redis *redis.Client
-	cfg   config.Config
-	log   *logger.Logger
-	http  *http.Client
-	isu   *ISUClient
+	repo     *repository.Repository
+	redis    *redis.Client
+	cfg      config.Config
+	log      *logger.Logger
+	http     *http.Client
+	isu      *ISUClient
+	ipIntel  *security.IPIntelService
+	threatDet *security.ThreatDetector
 }
 
 type RequestMeta struct {
@@ -64,12 +66,14 @@ type RegisterRequest struct {
 
 func New(repo *repository.Repository, redisClient *redis.Client, cfg config.Config, log *logger.Logger) *Service {
 	return &Service{
-		repo:  repo,
-		redis: redisClient,
-		cfg:   cfg,
-		log:   log,
-		http:  &http.Client{Timeout: 15 * time.Second},
-		isu:   NewISUClient(redisClient, cfg.ISUProxyURL),
+		repo:      repo,
+		redis:     redisClient,
+		cfg:       cfg,
+		log:       log,
+		http:      &http.Client{Timeout: 15 * time.Second},
+		isu:       NewISUClient(redisClient, cfg.ISUProxyURL),
+		ipIntel:   security.NewIPIntelService(redisClient),
+		threatDet: security.NewThreatDetector(redisClient),
 	}
 }
 
@@ -149,10 +153,63 @@ func (s *Service) Audit(ctx context.Context, meta RequestMeta, action, entityTyp
 	if metadata == nil {
 		metadata = map[string]any{}
 	}
-	return s.repo.CreateAuditLog(ctx, repository.AuditParams{
+
+	// Enrich with IP intelligence (geo, ISP, VPN/proxy)
+	intel := s.ipIntel.Lookup(ctx, meta.IP)
+
+	// Run threat detection
+	threat := s.threatDet.Analyse(ctx, meta.UserID, meta.IP, meta.UserAgent, action, intel)
+
+	var lat, lon *float64
+	if intel.Lat != 0 || intel.Lon != 0 {
+		lat = &intel.Lat
+		lon = &intel.Lon
+	}
+
+	auditID, err := s.repo.CreateAuditLog(ctx, repository.AuditParams{
 		UserID: meta.UserID, Action: action, EntityType: entityType, EntityID: entityID,
 		IPAddress: meta.IP, UserAgent: meta.UserAgent, Metadata: metadata,
+		Country: intel.Country, CountryCode: intel.CountryCode,
+		City: intel.City, Region: intel.Region,
+		ISP: intel.ISP, Org: intel.Org, ASNumber: intel.AS,
+		IsVPN: intel.IsVPN, IsProxy: intel.IsProxy,
+		IsTor: intel.IsTor, IsHosting: intel.IsHosting,
+		ThreatLevel: threat.Level, ThreatTypes: threat.Types,
+		Latitude: lat, Longitude: lon, Timezone: intel.Timezone,
 	})
+	if err != nil {
+		s.log.Error("audit_log_failed", "error", err.Error(), "action", action)
+		return err
+	}
+
+	// Persist security alerts
+	for _, alert := range threat.Alerts {
+		_ = s.repo.CreateSecurityAlert(ctx, repository.SecurityAlertParams{
+			AuditLogID:  auditID,
+			UserID:      meta.UserID,
+			AlertType:   alert.Type,
+			Severity:    alert.Severity,
+			Title:       alert.Title,
+			Description: alert.Description,
+			IPAddress:   meta.IP,
+			Country:     intel.Country,
+			City:        intel.City,
+			Metadata:    alert.Metadata,
+		})
+	}
+
+	if threat.Level != "none" {
+		s.log.Info("security_threat_detected",
+			"level", threat.Level,
+			"types", threat.Types,
+			"ip", meta.IP,
+			"user", meta.UserID,
+			"action", action,
+			"country", intel.Country,
+		)
+	}
+
+	return nil
 }
 
 func (s *Service) ListBuildings(ctx context.Context) ([]domain.Building, error) {

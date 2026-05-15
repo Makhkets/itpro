@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AtSign,
   Building2,
+  CreditCard,
   GraduationCap,
   ShieldCheck,
   Send as SendIcon,
@@ -16,11 +18,13 @@ import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { ROLE_LABEL } from "@/shared/lib/role";
 import { fmtDate } from "@/shared/lib/date";
+import { StudentCard } from "@/features/student-card/StudentCard";
 
 export default function ProfilePage() {
   const { user } = useAuth();
   const me = useQuery({ queryKey: ["me"], queryFn: () => usersApi.me() });
   const u = me.data ?? user;
+  const [cardOpen, setCardOpen] = useState(false);
   if (!u) return null;
 
   return (
@@ -43,9 +47,18 @@ export default function ProfilePage() {
                 <Badge variant="muted">{u.department}</Badge>
               )}
             </div>
+            <button
+              onClick={() => setCardOpen(true)}
+              className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-burgundy text-white text-sm font-medium hover:bg-burgundy-dark transition-colors shadow-sm"
+            >
+              <CreditCard className="h-4 w-4" />
+              Карточка студента
+            </button>
           </div>
         </div>
       </Card>
+
+      <StudentCard user={u} open={cardOpen} onClose={() => setCardOpen(false)} />
 
       <div className="grid md:grid-cols-2 gap-4">
         <InfoRow icon={<AtSign className="h-4 w-4" />} label="Email" value={u.email} />

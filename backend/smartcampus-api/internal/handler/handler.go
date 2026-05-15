@@ -120,6 +120,10 @@ func (h *Handler) RegisterRoutes(api *gin.RouterGroup, redisClient *redis.Client
 	protected.GET("/analytics/telegram/summary", middleware.RequireRole("admin"), h.TelegramSummary)
 	protected.GET("/analytics/ai/summary", middleware.RequireRole("admin"), h.AISummary)
 	protected.GET("/audit-logs", middleware.RequireRole("admin"), h.AuditLogs)
+
+	protected.GET("/security/dashboard", middleware.RequireRole("admin"), h.SecurityDashboard)
+	protected.GET("/security/alerts", middleware.RequireRole("admin"), h.SecurityAlerts)
+	protected.PATCH("/security/alerts/:id/resolve", middleware.RequireRole("admin"), h.ResolveSecurityAlert)
 }
 
 func (h *Handler) Health(c *gin.Context) {
@@ -708,6 +712,26 @@ func (h *Handler) AISummary(c *gin.Context) {
 func (h *Handler) AuditLogs(c *gin.Context) {
 	items, err := h.repo.ListAuditLogs(c.Request.Context(), page(c), pageSize(c))
 	write(c, items, mapRepoErr(err))
+}
+
+func (h *Handler) SecurityDashboard(c *gin.Context) {
+	item, err := h.repo.SecurityDashboard(c.Request.Context())
+	write(c, item, mapRepoErr(err))
+}
+
+func (h *Handler) SecurityAlerts(c *gin.Context) {
+	onlyUnresolved := c.Query("unresolved") == "true"
+	items, err := h.repo.ListSecurityAlerts(c.Request.Context(), page(c), pageSize(c), onlyUnresolved)
+	write(c, items, mapRepoErr(err))
+}
+
+func (h *Handler) ResolveSecurityAlert(c *gin.Context) {
+	err := h.repo.ResolveSecurityAlert(c.Request.Context(), c.Param("id"), c.GetString(middleware.ContextUserID))
+	if err != nil {
+		response.WriteError(c, mapRepoErr(err))
+		return
+	}
+	response.OK(c, gin.H{"ok": true})
 }
 
 func (h *Handler) PrivacyMe(c *gin.Context) {

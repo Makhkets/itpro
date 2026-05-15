@@ -385,7 +385,62 @@ export interface AuditLog {
   ipAddress?: string;
   userAgent?: string;
   metadata?: Record<string, unknown>;
+  country?: string;
+  countryCode?: string;
+  city?: string;
+  region?: string;
+  isp?: string;
+  org?: string;
+  asNumber?: string;
+  isVpn: boolean;
+  isProxy: boolean;
+  isTor: boolean;
+  isHosting: boolean;
+  threatLevel: string;
+  threatTypes: string[];
+  latitude?: number | null;
+  longitude?: number | null;
+  timezone?: string;
   createdAt: string;
+}
+
+export interface SecurityAlert {
+  id: string;
+  auditLogId?: string;
+  userId?: string;
+  alertType: string;
+  severity: string;
+  title: string;
+  description: string;
+  ipAddress?: string;
+  country?: string;
+  city?: string;
+  metadata?: Record<string, unknown>;
+  isResolved: boolean;
+  resolvedBy?: string;
+  resolvedAt?: string | null;
+  createdAt: string;
+}
+
+export interface CountStat {
+  name: string;
+  count: number;
+}
+
+export interface SecurityDashboard {
+  totalEvents: number;
+  eventsLast24h: number;
+  uniqueIPs24h: number;
+  uniqueUsers24h: number;
+  failedLogins24h: number;
+  vpnAccesses24h: number;
+  proxyAccesses24h: number;
+  torAccesses24h: number;
+  threatsByLevel: Record<string, number>;
+  topCountries: CountStat[];
+  topISPs: CountStat[];
+  recentAlerts: SecurityAlert[];
+  unresolvedAlerts: number;
 }
 
 export interface PrivacyMeResult {

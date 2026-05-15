@@ -50,6 +50,7 @@ const AdminAttendancePage = lazy(() => import("@/pages/admin/AdminAttendancePage
 const AdminAnalyticsPage = lazy(() => import("@/pages/admin/AdminAnalyticsPage"));
 const AdminFaqPage = lazy(() => import("@/pages/admin/AdminFaqPage"));
 const AdminAuditLogsPage = lazy(() => import("@/pages/admin/AdminAuditLogsPage"));
+const AdminSecurityPage = lazy(() => import("@/pages/admin/AdminSecurityPage"));
 
 function Loading() {
   return (
@@ -228,6 +229,14 @@ export default function App() {
             element={
               <RoleGuard roles={["admin"]}>
                 <AdminAuditLogsPage />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/admin/security"
+            element={
+              <RoleGuard roles={["admin"]}>
+                <AdminSecurityPage />
               </RoleGuard>
             }
           />

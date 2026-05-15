@@ -133,10 +133,11 @@ export function getNavigation(role: Role): NavGroup[] {
       ],
     },
     {
-      title: "Аналитика",
+      title: "Аналитика и безопасность",
       items: [
         { to: "/admin/analytics", label: "Аналитика", icon: BarChart3 },
-        { to: "/admin/audit-logs", label: "Аудит", icon: Shield },
+        { to: "/admin/security", label: "Кибербезопасность", icon: Shield },
+        { to: "/admin/audit-logs", label: "Аудит-лог", icon: ClipboardCheck },
       ],
     },
   ];

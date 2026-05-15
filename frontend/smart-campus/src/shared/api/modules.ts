@@ -29,6 +29,8 @@ import type {
   RoomUtilizationRow,
   Schedule,
   ScheduleCurrent,
+  SecurityAlert,
+  SecurityDashboard,
   StudentAttendanceAnalytics,
   TelegramLinkStart,
   User,
@@ -236,4 +238,13 @@ export const analyticsApi = {
 export const auditApi = {
   list: (params?: Record<string, unknown>) =>
     get<AuditLog[]>("/audit-logs", params),
+};
+
+// ---------- Security ----------
+export const securityApi = {
+  dashboard: () => get<SecurityDashboard>("/security/dashboard"),
+  alerts: (params?: Record<string, unknown>) =>
+    get<SecurityAlert[]>("/security/alerts", params),
+  resolveAlert: (id: string) =>
+    patch<{ ok: boolean }>(`/security/alerts/${id}/resolve`),
 };
