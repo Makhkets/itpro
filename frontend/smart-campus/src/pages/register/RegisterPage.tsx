@@ -161,6 +161,14 @@ export default function RegisterPage() {
               </div>
             )}
 
+            <label className="flex items-start gap-3 rounded-xl border border-border bg-white px-4 py-3 text-sm text-muted">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-border accent-burgundy"
+              />
+              <span>Я даю согласие на обработку персональных данных</span>
+            </label>
+
             <Button
               type="submit"
               size="lg"
