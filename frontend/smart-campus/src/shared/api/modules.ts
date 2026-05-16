@@ -13,9 +13,13 @@ import type {
   Booking,
   BookingCreateRequest,
   BookingsByStatus,
+  BRSJournalEntry,
+  BRSResult,
   Building,
   CampusRoute,
   Floor,
+  ISUInstitute,
+  ISULoginRequest,
   LibraryBook,
   LibraryLoan,
   LibrarySummary,
@@ -29,6 +33,8 @@ import type {
   RoomUtilizationRow,
   Schedule,
   ScheduleCurrent,
+  SecurityAlert,
+  SecurityDashboard,
   StudentAttendanceAnalytics,
   TelegramLinkStart,
   User,
@@ -46,6 +52,7 @@ const del = <T>(url: string) => apiClient.delete<T>(url).then((r) => r.data);
 export const authApi = {
   login: (data: LoginRequest) => post<AuthResult>("/auth/login", data),
   register: (data: RegisterRequest) => post<AuthResult>("/auth/register", data),
+  isuLogin: (data: ISULoginRequest) => post<AuthResult>("/auth/isu-login", data),
 };
 
 // ---------- Users ----------
@@ -112,6 +119,14 @@ export const scheduleApi = {
   byTeacher: (teacherId: string, params?: Record<string, unknown>) =>
     get<Schedule[]>(`/schedule/teacher/${teacherId}`, params),
   current: () => get<ScheduleCurrent>("/schedule/current"),
+  examByGroup: (groupName: string, params?: Record<string, unknown>) =>
+    get<Schedule[]>(`/schedule/exam/group/${encodeURIComponent(groupName)}`, params),
+  examByTeacher: (teacherId: string, params?: Record<string, unknown>) =>
+    get<Schedule[]>(`/schedule/exam/teacher/${teacherId}`, params),
+  my: () => get<unknown>("/schedule/my"),
+  myExam: () => get<unknown>("/schedule/my/exam"),
+  teacherMy: () => get<unknown>("/schedule/teacher-my"),
+  teacherMyExam: () => get<unknown>("/schedule/teacher-my/exam"),
 };
 
 // ---------- Bookings ----------
@@ -236,4 +251,35 @@ export const analyticsApi = {
 export const auditApi = {
   list: (params?: Record<string, unknown>) =>
     get<AuditLog[]>("/audit-logs", params),
+};
+
+// ---------- BRS ----------
+export const brsApi = {
+  my: (params?: { yearStart?: number; yearEnd?: number; semester?: number }) =>
+    get<BRSResult>("/brs/my", params as Record<string, unknown>),
+  journal: (disciplineId: number, params?: { yearStart?: number; yearEnd?: number; semester?: number }) =>
+    get<BRSJournalEntry[]>(`/brs/journal/${disciplineId}`, params as Record<string, unknown>),
+  profile: (params?: { yearStart?: number; yearEnd?: number; semester?: number }) =>
+    get<unknown>("/brs/profile", params as Record<string, unknown>),
+  specializationAvg: (params?: { yearStart?: number; yearEnd?: number; semester?: number }) =>
+    get<unknown>("/brs/specialization-avg", params as Record<string, unknown>),
+  disciplines: (params?: { yearStart?: number; yearEnd?: number; semester?: number }) =>
+    get<unknown>("/brs/disciplines", params as Record<string, unknown>),
+};
+
+// ---------- ISU ----------
+export const isuApi = {
+  institutes: () => get<ISUInstitute[]>("/isu/institutes"),
+  roles: () => get<unknown>("/isu/roles"),
+  contracts: () => get<unknown>("/isu/contracts"),
+  contractsYears: () => get<unknown>("/isu/contracts/years"),
+};
+
+// ---------- Security ----------
+export const securityApi = {
+  dashboard: () => get<SecurityDashboard>("/security/dashboard"),
+  alerts: (params?: Record<string, unknown>) =>
+    get<SecurityAlert[]>("/security/alerts", params),
+  resolveAlert: (id: string) =>
+    patch<{ ok: boolean }>(`/security/alerts/${id}/resolve`),
 };

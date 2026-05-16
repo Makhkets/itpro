@@ -72,6 +72,25 @@ func (r *Repository) UpdateConsent(ctx context.Context, userID string, consent b
 	return u, normalizeErr(err)
 }
 
+func (r *Repository) UpsertUserByEmail(ctx context.Context, p CreateUserParams) (domain.User, error) {
+	row := r.pool.QueryRow(ctx, `
+		INSERT INTO users(full_name, email, password_hash, role, group_name, department)
+		VALUES($1,$2,$3,$4,$5,$6)
+		ON CONFLICT(email) DO UPDATE SET
+			full_name  = EXCLUDED.full_name,
+			group_name = COALESCE(EXCLUDED.group_name, users.group_name),
+			department = COALESCE(EXCLUDED.department, users.department),
+			role       = EXCLUDED.role,
+			updated_at = NOW()
+		RETURNING id::text, full_name, email, password_hash, role, group_name, department,
+		          telegram_chat_id, telegram_username, is_telegram_verified, personal_data_consent,
+		          is_active, created_at, updated_at`,
+		p.FullName, p.Email, p.PasswordHash, p.Role, stringOrNull(p.GroupName), stringOrNull(p.Department),
+	)
+	u, err := scanUser(row)
+	return u, normalizeErr(err)
+}
+
 func (r *Repository) FindUserByTelegramChat(ctx context.Context, chatID int64) (domain.User, error) {
 	row := r.pool.QueryRow(ctx, `
 		SELECT id::text, full_name, email, password_hash, role, group_name, department,

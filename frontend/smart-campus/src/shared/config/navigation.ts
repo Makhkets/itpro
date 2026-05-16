@@ -18,6 +18,8 @@ import {
   HelpCircle,
   Users,
   Sparkles,
+  GraduationCap,
+  Landmark,
 } from "lucide-react";
 import type { Role } from "@/shared/api/types";
 
@@ -44,6 +46,7 @@ export function getNavigation(role: Role): NavGroup[] {
       { to: scheduleTo, label: "Расписание", icon: Calendar },
       { to: "/ai", label: "AI-ассистент", icon: Bot },
       { to: "/library", label: "Библиотека", icon: Library },
+      { to: "/institutes", label: "Институты", icon: Landmark },
       { to: "/notifications", label: "Уведомления", icon: Bell },
       { to: "/telegram", label: "Telegram", icon: Send },
       { to: "/profile", label: "Профиль", icon: Users },
@@ -57,7 +60,8 @@ export function getNavigation(role: Role): NavGroup[] {
       {
         title: "Учёба",
         items: [
-          { to: "/attendance/my", label: "Посещаемость", icon: ClipboardCheck },
+          { to: "/brs", label: "БРС", icon: GraduationCap },
+          { to: "/analytics", label: "Аналитика учёбы", icon: BarChart3 },
         ],
       },
       {
@@ -133,10 +137,11 @@ export function getNavigation(role: Role): NavGroup[] {
       ],
     },
     {
-      title: "Аналитика",
+      title: "Аналитика и безопасность",
       items: [
         { to: "/admin/analytics", label: "Аналитика", icon: BarChart3 },
-        { to: "/admin/audit-logs", label: "Аудит", icon: Shield },
+        { to: "/admin/security", label: "Кибербезопасность", icon: Shield },
+        { to: "/admin/audit-logs", label: "Аудит-лог", icon: ClipboardCheck },
       ],
     },
   ];

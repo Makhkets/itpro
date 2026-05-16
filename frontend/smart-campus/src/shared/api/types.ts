@@ -385,7 +385,62 @@ export interface AuditLog {
   ipAddress?: string;
   userAgent?: string;
   metadata?: Record<string, unknown>;
+  country?: string;
+  countryCode?: string;
+  city?: string;
+  region?: string;
+  isp?: string;
+  org?: string;
+  asNumber?: string;
+  isVpn: boolean;
+  isProxy: boolean;
+  isTor: boolean;
+  isHosting: boolean;
+  threatLevel: string;
+  threatTypes: string[];
+  latitude?: number | null;
+  longitude?: number | null;
+  timezone?: string;
   createdAt: string;
+}
+
+export interface SecurityAlert {
+  id: string;
+  auditLogId?: string;
+  userId?: string;
+  alertType: string;
+  severity: string;
+  title: string;
+  description: string;
+  ipAddress?: string;
+  country?: string;
+  city?: string;
+  metadata?: Record<string, unknown>;
+  isResolved: boolean;
+  resolvedBy?: string;
+  resolvedAt?: string | null;
+  createdAt: string;
+}
+
+export interface CountStat {
+  name: string;
+  count: number;
+}
+
+export interface SecurityDashboard {
+  totalEvents: number;
+  eventsLast24h: number;
+  uniqueIPs24h: number;
+  uniqueUsers24h: number;
+  failedLogins24h: number;
+  vpnAccesses24h: number;
+  proxyAccesses24h: number;
+  torAccesses24h: number;
+  threatsByLevel: Record<string, number>;
+  topCountries: CountStat[];
+  topISPs: CountStat[];
+  recentAlerts: SecurityAlert[];
+  unresolvedAlerts: number;
 }
 
 export interface PrivacyMeResult {
@@ -397,6 +452,52 @@ export interface TelegramLinkStart {
   code: string;
   expiresIn: string;
   command: string;
+}
+
+// ---------- ISU / BRS ----------
+
+export interface ISULoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface BRSGrade {
+  disciplineId: number;
+  disciplineName: string;
+  teacherName: string;
+  att1Current: number;
+  att1Border: number;
+  att2Current: number;
+  att2Border: number;
+  attendance: number;
+  independentWork: number;
+  retake: number;
+  bonus: number;
+  total: number;
+  examType: string;
+  isOpen1: boolean;
+  isOpen2: boolean;
+}
+
+export interface BRSJournalEntry {
+  pk: number;
+  attended: boolean;
+  date: string;
+  grade: number;
+}
+
+export interface BRSResult {
+  grades: BRSGrade[];
+  semesterNum: number;
+  yearStart: number;
+  yearEnd: number;
+  error?: string;
+}
+
+export interface ISUInstitute {
+  id: number;
+  unit: string;
+  name: string;
 }
 
 export interface Paginated<T> {

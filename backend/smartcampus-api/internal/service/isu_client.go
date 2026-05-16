@@ -15,11 +15,13 @@ import (
 )
 
 const (
-	isuBaseURL     = "https://backend-isu.gstou.ru/api/timetable/public/entrie/"
-	isuOrigin      = "https://isu.gstou.ru"
-	isuReferer     = "https://isu.gstou.ru/"
-	isuCacheTTL    = 5 * time.Minute
-	isuHTTPTimeout = 12 * time.Second
+	isuBaseURL      = "https://backend-isu.gstou.ru/api/timetable/public/entrie/"
+	isuExamBaseURL  = "https://backend-isu.gstou.ru/api/timetable/public/entrie/exam/"
+	isuInstitutesURL = "https://backend-isu.gstou.ru/api/institutes/"
+	isuOrigin       = "https://isu.gstou.ru"
+	isuReferer      = "https://isu.gstou.ru/"
+	isuCacheTTL     = 5 * time.Minute
+	isuHTTPTimeout  = 12 * time.Second
 )
 
 // ISUEntry mirrors a single timetable entry returned by ISU GSTOU public API.
@@ -104,7 +106,7 @@ func (c *ISUClient) ByGroup(ctx context.Context, groupName string) ([]ISUEntry, 
 	if groupName == "" {
 		return nil, errors.New("group name is required")
 	}
-	return c.fetch(ctx, "group", groupName)
+	return c.fetch(ctx, isuBaseURL, "group", groupName)
 }
 
 func (c *ISUClient) ByTeacher(ctx context.Context, teacherName string) ([]ISUEntry, error) {
@@ -112,11 +114,66 @@ func (c *ISUClient) ByTeacher(ctx context.Context, teacherName string) ([]ISUEnt
 	if teacherName == "" {
 		return nil, errors.New("teacher name is required")
 	}
-	return c.fetch(ctx, "teacher", teacherName)
+	return c.fetch(ctx, isuBaseURL, "teacher", teacherName)
 }
 
-func (c *ISUClient) fetch(ctx context.Context, paramName, paramValue string) ([]ISUEntry, error) {
-	cacheKey := fmt.Sprintf("cache:isu:%s:%s", paramName, strings.ToLower(paramValue))
+func (c *ISUClient) ByGroupExam(ctx context.Context, groupName string) ([]ISUEntry, error) {
+	groupName = strings.TrimSpace(groupName)
+	if groupName == "" {
+		return nil, errors.New("group name is required")
+	}
+	return c.fetch(ctx, isuExamBaseURL, "group", groupName)
+}
+
+func (c *ISUClient) ByTeacherExam(ctx context.Context, teacherName string) ([]ISUEntry, error) {
+	teacherName = strings.TrimSpace(teacherName)
+	if teacherName == "" {
+		return nil, errors.New("teacher name is required")
+	}
+	return c.fetch(ctx, isuExamBaseURL, "teacher", teacherName)
+}
+
+// Institutes fetches the list of ISU institutes (public, no auth).
+func (c *ISUClient) Institutes(ctx context.Context) (json.RawMessage, error) {
+	cacheKey := "cache:isu:institutes"
+	if c.redis != nil {
+		if cached, err := c.redis.Get(ctx, cacheKey).Bytes(); err == nil && len(cached) > 0 {
+			return json.RawMessage(cached), nil
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, isuInstitutesURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Origin", isuOrigin)
+	req.Header.Set("Referer", isuReferer)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("isu institutes request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, fmt.Errorf("isu returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 65536))
+	if err != nil {
+		return nil, fmt.Errorf("isu institutes read failed: %w", err)
+	}
+
+	if c.redis != nil {
+		_ = c.redis.Set(ctx, cacheKey, data, 30*time.Minute).Err()
+	}
+	return json.RawMessage(data), nil
+}
+
+func (c *ISUClient) fetch(ctx context.Context, baseURL, paramName, paramValue string) ([]ISUEntry, error) {
+	cacheKey := fmt.Sprintf("cache:isu:%s:%s:%s", baseURL, paramName, strings.ToLower(paramValue))
 	if c.redis != nil {
 		if cached, err := c.redis.Get(ctx, cacheKey).Bytes(); err == nil && len(cached) > 0 {
 			var entries []ISUEntry
@@ -126,7 +183,7 @@ func (c *ISUClient) fetch(ctx context.Context, paramName, paramValue string) ([]
 		}
 	}
 
-	u, _ := url.Parse(isuBaseURL)
+	u, _ := url.Parse(baseURL)
 	q := u.Query()
 	q.Set(paramName, paramValue)
 	u.RawQuery = q.Encode()

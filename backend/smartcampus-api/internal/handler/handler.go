@@ -33,6 +33,7 @@ func (h *Handler) RegisterRoutes(api *gin.RouterGroup, redisClient *redis.Client
 	api.GET("/health", h.Health)
 	api.POST("/auth/register", middleware.RateLimit(redisClient, "rate_limit:register", h.cfg.RateLimitRegisterPerMinute, time.Minute, false), h.Register)
 	api.POST("/auth/login", middleware.RateLimit(redisClient, "rate_limit:login", h.cfg.RateLimitLoginPerMinute, time.Minute, false), h.Login)
+	api.POST("/auth/isu-login", middleware.RateLimit(redisClient, "rate_limit:login", h.cfg.RateLimitLoginPerMinute, time.Minute, false), h.ISULogin)
 	api.GET("/applicant-faq", h.ListFAQ)
 	api.GET("/applicant-faq/search", h.SearchFAQ)
 
@@ -63,9 +64,24 @@ func (h *Handler) RegisterRoutes(api *gin.RouterGroup, redisClient *redis.Client
 	protected.PATCH("/navigation/routes/:id", middleware.RequireRole("admin"), h.UpdateRoute)
 
 	protected.GET("/rooms/:id/schedule", h.RoomSchedule)
+	protected.GET("/brs/my", h.MyBRS)
+	protected.GET("/brs/profile", h.MyBRSProfile)
+	protected.GET("/brs/specialization-avg", h.MyBRSSpecializationAvg)
+	protected.GET("/brs/disciplines", h.MyBRSDisciplines)
+	protected.GET("/brs/journal/:disciplineId", h.MyBRSJournal)
 	protected.GET("/schedule/group/:groupName", h.GroupSchedule)
 	protected.GET("/schedule/teacher/:teacherId", h.TeacherSchedule)
 	protected.GET("/schedule/current", h.CurrentSchedule)
+	protected.GET("/schedule/exam/group/:groupName", h.GroupExamSchedule)
+	protected.GET("/schedule/exam/teacher/:teacherId", h.TeacherExamSchedule)
+	protected.GET("/schedule/my", h.MyStudentSchedule)
+	protected.GET("/schedule/my/exam", h.MyStudentExamSchedule)
+	protected.GET("/schedule/teacher-my", h.MyTeacherScheduleHandler)
+	protected.GET("/schedule/teacher-my/exam", h.MyTeacherExamScheduleHandler)
+	protected.GET("/isu/institutes", h.ISUInstitutes)
+	protected.GET("/isu/roles", h.MyISURoles)
+	protected.GET("/isu/contracts", h.MyContracts)
+	protected.GET("/isu/contracts/years", h.ContractsYears)
 	protected.GET("/rooms/:id/availability", h.RoomAvailability)
 
 	protected.POST("/bookings", h.CreateBooking)
@@ -120,6 +136,10 @@ func (h *Handler) RegisterRoutes(api *gin.RouterGroup, redisClient *redis.Client
 	protected.GET("/analytics/telegram/summary", middleware.RequireRole("admin"), h.TelegramSummary)
 	protected.GET("/analytics/ai/summary", middleware.RequireRole("admin"), h.AISummary)
 	protected.GET("/audit-logs", middleware.RequireRole("admin"), h.AuditLogs)
+
+	protected.GET("/security/dashboard", middleware.RequireRole("admin"), h.SecurityDashboard)
+	protected.GET("/security/alerts", middleware.RequireRole("admin"), h.SecurityAlerts)
+	protected.PATCH("/security/alerts/:id/resolve", middleware.RequireRole("admin"), h.ResolveSecurityAlert)
 }
 
 func (h *Handler) Health(c *gin.Context) {
@@ -162,6 +182,47 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 	response.OK(c, out)
+}
+
+func (h *Handler) ISULogin(c *gin.Context) {
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if !bind(c, &req) {
+		return
+	}
+	if strings.TrimSpace(req.Username) == "" || strings.TrimSpace(req.Password) == "" {
+		response.WriteError(c, response.Validation("username and password are required", nil))
+		return
+	}
+	out, err := h.svc.LoginISU(c.Request.Context(), req.Username, req.Password, meta(c))
+	if err != nil {
+		response.WriteError(c, err)
+		return
+	}
+	response.OK(c, out)
+}
+
+func (h *Handler) MyBRS(c *gin.Context) {
+	yearStart := atoi(c.Query("yearStart"), time.Now().Year())
+	yearEnd := atoi(c.Query("yearEnd"), time.Now().Year()+1)
+	semester := atoi(c.Query("semester"), 1)
+	out, err := h.svc.MyBRS(c.Request.Context(), c.GetString(middleware.ContextUserID), yearStart, yearEnd, semester)
+	write(c, out, err)
+}
+
+func (h *Handler) MyBRSJournal(c *gin.Context) {
+	disciplineID := atoi(c.Param("disciplineId"), 0)
+	if disciplineID == 0 {
+		response.WriteError(c, response.BadRequest("disciplineId is required", nil))
+		return
+	}
+	yearStart := atoi(c.Query("yearStart"), time.Now().Year())
+	yearEnd := atoi(c.Query("yearEnd"), time.Now().Year()+1)
+	semester := atoi(c.Query("semester"), 1)
+	out, err := h.svc.MyBRSJournal(c.Request.Context(), c.GetString(middleware.ContextUserID), disciplineID, yearStart, yearEnd, semester)
+	write(c, out, err)
 }
 
 func (h *Handler) Me(c *gin.Context) {
@@ -352,6 +413,139 @@ func (h *Handler) CurrentSchedule(c *gin.Context) {
 	}
 	item, err := h.svc.CurrentScheduleISU(c.Request.Context(), group, time.Now())
 	write(c, item, err)
+}
+
+// GroupExamSchedule returns exam schedule entries for a group.
+func (h *Handler) GroupExamSchedule(c *gin.Context) {
+	from, to := rangeQuery(c)
+	items, err := h.svc.GroupExamScheduleISU(c.Request.Context(), c.Param("groupName"), from, to)
+	write(c, items, err)
+}
+
+// TeacherExamSchedule returns exam schedule entries for a teacher.
+func (h *Handler) TeacherExamSchedule(c *gin.Context) {
+	from, to := rangeQuery(c)
+	items, err := h.svc.TeacherExamScheduleISU(c.Request.Context(), c.Param("teacherId"), from, to)
+	write(c, items, err)
+}
+
+// ISUInstitutes returns the list of ISU institutes (public data).
+func (h *Handler) ISUInstitutes(c *gin.Context) {
+	data, err := h.svc.ISUInstitutes(c.Request.Context())
+	if err != nil {
+		response.WriteError(c, err)
+		return
+	}
+	c.Data(200, "application/json; charset=utf-8", data)
+}
+
+// MyStudentSchedule returns the authenticated student's personal ISU timetable.
+func (h *Handler) MyStudentSchedule(c *gin.Context) {
+	data, err := h.svc.MyStudentSchedule(c.Request.Context(), c.GetString(middleware.ContextUserID))
+	if err != nil {
+		response.WriteError(c, err)
+		return
+	}
+	c.Data(200, "application/json; charset=utf-8", data)
+}
+
+// MyStudentExamSchedule returns the authenticated student's exam schedule.
+func (h *Handler) MyStudentExamSchedule(c *gin.Context) {
+	data, err := h.svc.MyStudentExamSchedule(c.Request.Context(), c.GetString(middleware.ContextUserID))
+	if err != nil {
+		response.WriteError(c, err)
+		return
+	}
+	c.Data(200, "application/json; charset=utf-8", data)
+}
+
+// MyBRSProfile returns the authenticated student's BRS profile.
+func (h *Handler) MyBRSProfile(c *gin.Context) {
+	yearStart := atoi(c.Query("yearStart"), time.Now().Year())
+	yearEnd := atoi(c.Query("yearEnd"), time.Now().Year()+1)
+	semester := atoi(c.Query("semester"), 1)
+	data, err := h.svc.MyBRSProfile(c.Request.Context(), c.GetString(middleware.ContextUserID), yearStart, yearEnd, semester)
+	if err != nil {
+		response.WriteError(c, err)
+		return
+	}
+	c.Data(200, "application/json; charset=utf-8", data)
+}
+
+// MyBRSSpecializationAvg returns the authenticated student's BRS specialization average.
+func (h *Handler) MyBRSSpecializationAvg(c *gin.Context) {
+	yearStart := atoi(c.Query("yearStart"), time.Now().Year())
+	yearEnd := atoi(c.Query("yearEnd"), time.Now().Year()+1)
+	semester := atoi(c.Query("semester"), 1)
+	data, err := h.svc.MyBRSSpecializationAvg(c.Request.Context(), c.GetString(middleware.ContextUserID), yearStart, yearEnd, semester)
+	if err != nil {
+		response.WriteError(c, err)
+		return
+	}
+	c.Data(200, "application/json; charset=utf-8", data)
+}
+
+// MyBRSDisciplines returns the authenticated student's BRS disciplines.
+func (h *Handler) MyBRSDisciplines(c *gin.Context) {
+	yearStart := atoi(c.Query("yearStart"), time.Now().Year())
+	yearEnd := atoi(c.Query("yearEnd"), time.Now().Year()+1)
+	semester := atoi(c.Query("semester"), 1)
+	data, err := h.svc.MyBRSDisciplines(c.Request.Context(), c.GetString(middleware.ContextUserID), yearStart, yearEnd, semester)
+	if err != nil {
+		response.WriteError(c, err)
+		return
+	}
+	c.Data(200, "application/json; charset=utf-8", data)
+}
+
+// MyTeacherScheduleHandler returns the authenticated teacher's ISU timetable.
+func (h *Handler) MyTeacherScheduleHandler(c *gin.Context) {
+	data, err := h.svc.MyTeacherSchedule(c.Request.Context(), c.GetString(middleware.ContextUserID))
+	if err != nil {
+		response.WriteError(c, err)
+		return
+	}
+	c.Data(200, "application/json; charset=utf-8", data)
+}
+
+// MyTeacherExamScheduleHandler returns the authenticated teacher's ISU exam schedule.
+func (h *Handler) MyTeacherExamScheduleHandler(c *gin.Context) {
+	data, err := h.svc.MyTeacherExamSchedule(c.Request.Context(), c.GetString(middleware.ContextUserID))
+	if err != nil {
+		response.WriteError(c, err)
+		return
+	}
+	c.Data(200, "application/json; charset=utf-8", data)
+}
+
+// MyContracts returns the authenticated user's ISU contracts.
+func (h *Handler) MyContracts(c *gin.Context) {
+	data, err := h.svc.MyContracts(c.Request.Context(), c.GetString(middleware.ContextUserID))
+	if err != nil {
+		response.WriteError(c, err)
+		return
+	}
+	c.Data(200, "application/json; charset=utf-8", data)
+}
+
+// ContractsYears returns available contract years from ISU.
+func (h *Handler) ContractsYears(c *gin.Context) {
+	data, err := h.svc.ContractsYears(c.Request.Context(), c.GetString(middleware.ContextUserID))
+	if err != nil {
+		response.WriteError(c, err)
+		return
+	}
+	c.Data(200, "application/json; charset=utf-8", data)
+}
+
+// MyISURoles returns the authenticated user's ISU roles.
+func (h *Handler) MyISURoles(c *gin.Context) {
+	data, err := h.svc.MyISURoles(c.Request.Context(), c.GetString(middleware.ContextUserID))
+	if err != nil {
+		response.WriteError(c, err)
+		return
+	}
+	c.Data(200, "application/json; charset=utf-8", data)
 }
 
 func (h *Handler) RoomAvailability(c *gin.Context) {
@@ -708,6 +902,26 @@ func (h *Handler) AISummary(c *gin.Context) {
 func (h *Handler) AuditLogs(c *gin.Context) {
 	items, err := h.repo.ListAuditLogs(c.Request.Context(), page(c), pageSize(c))
 	write(c, items, mapRepoErr(err))
+}
+
+func (h *Handler) SecurityDashboard(c *gin.Context) {
+	item, err := h.repo.SecurityDashboard(c.Request.Context())
+	write(c, item, mapRepoErr(err))
+}
+
+func (h *Handler) SecurityAlerts(c *gin.Context) {
+	onlyUnresolved := c.Query("unresolved") == "true"
+	items, err := h.repo.ListSecurityAlerts(c.Request.Context(), page(c), pageSize(c), onlyUnresolved)
+	write(c, items, mapRepoErr(err))
+}
+
+func (h *Handler) ResolveSecurityAlert(c *gin.Context) {
+	err := h.repo.ResolveSecurityAlert(c.Request.Context(), c.Param("id"), c.GetString(middleware.ContextUserID))
+	if err != nil {
+		response.WriteError(c, mapRepoErr(err))
+		return
+	}
+	response.OK(c, gin.H{"ok": true})
 }
 
 func (h *Handler) PrivacyMe(c *gin.Context) {
