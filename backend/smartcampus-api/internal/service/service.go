@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -22,6 +24,7 @@ import (
 	"github.com/smartcampus/smartcampus-api/internal/response"
 	"github.com/smartcampus/smartcampus-api/internal/security"
 	"github.com/smartcampus/smartcampus-api/pkg/logger"
+	"golang.org/x/net/proxy"
 )
 
 type Service struct {
@@ -71,11 +74,63 @@ func New(repo *repository.Repository, redisClient *redis.Client, cfg config.Conf
 		redis:     redisClient,
 		cfg:       cfg,
 		log:       log,
-		http:      &http.Client{Timeout: 15 * time.Second},
+		http:      newAIHTTPClient(cfg.AIProxyURL, log),
 		isu:       NewISUClient(redisClient, cfg.ISUProxyURL),
 		isuAuth:   NewISUAuthClient(redisClient, log),
 		ipIntel:   security.NewIPIntelService(redisClient),
 		threatDet: security.NewThreatDetector(redisClient),
+	}
+}
+
+func newAIHTTPClient(proxyURL string, log *logger.Logger) *http.Client {
+	transport := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	proxyURL = strings.TrimSpace(proxyURL)
+	if proxyURL != "" {
+		parsed, err := url.Parse(proxyURL)
+		if err != nil || parsed.Host == "" {
+			log.Error("ai_proxy_invalid_url", "url", proxyURL, "error", fmt.Sprintf("%v", err))
+		} else {
+			switch strings.ToLower(parsed.Scheme) {
+			case "socks5", "socks5h":
+				var auth *proxy.Auth
+				if parsed.User != nil {
+					password, _ := parsed.User.Password()
+					auth = &proxy.Auth{User: parsed.User.Username(), Password: password}
+				}
+				dialer, err := proxy.SOCKS5("tcp", parsed.Host, auth, &net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				})
+				if err != nil {
+					log.Error("ai_proxy_socks5_init_failed", "error", err.Error())
+				} else {
+					contextDialer, ok := dialer.(proxy.ContextDialer)
+					if ok {
+						transport.DialContext = contextDialer.DialContext
+					} else {
+						transport.DialContext = func(_ context.Context, network, addr string) (net.Conn, error) {
+							return dialer.Dial(network, addr)
+						}
+					}
+					transport.Proxy = nil
+					log.Info("ai_proxy_configured", "scheme", parsed.Scheme, "host", parsed.Host)
+				}
+			case "http", "https":
+				transport.Proxy = http.ProxyURL(parsed)
+				log.Info("ai_proxy_configured", "scheme", parsed.Scheme, "host", parsed.Host)
+			default:
+				log.Error("ai_proxy_unsupported_scheme", "scheme", parsed.Scheme)
+			}
+		}
+	}
+	return &http.Client{
+		Timeout:   60 * time.Second,
+		Transport: transport,
 	}
 }
 
@@ -683,11 +738,13 @@ func (s *Service) VerifyTelegramLink(ctx context.Context, userID, code string, c
 }
 
 func (s *Service) FAQAnswer(ctx context.Context, question string) (string, []domain.AISource) {
-	faqs, err := s.repo.SearchFAQ(ctx, question)
-	if err != nil || len(faqs) == 0 {
-		return "Я не нашел точный ответ. Обратитесь в приемную комиссию или уточните вопрос.", nil
+	for _, query := range faqQueries(question) {
+		faqs, err := s.repo.SearchFAQ(ctx, query)
+		if err == nil && len(faqs) > 0 {
+			return faqs[0].Answer, []domain.AISource{{Type: "applicant_faq", ID: faqs[0].ID, Title: faqs[0].Question}}
+		}
 	}
-	return faqs[0].Answer, []domain.AISource{{Type: "applicant_faq", ID: faqs[0].ID, Title: faqs[0].Question}}
+	return "Я не нашел точный ответ. Обратитесь в приемную комиссию или уточните вопрос.", nil
 }
 
 func (s *Service) AIChat(ctx context.Context, userID string, consent bool, sessionID, message string, meta RequestMeta) (domain.AIAnswer, error) {
@@ -710,12 +767,9 @@ func (s *Service) AIChat(ctx context.Context, userID string, consent bool, sessi
 	fallbackAnswer, sources := s.fallbackAI(ctx, userID, message, meta)
 	answer := fallbackAnswer
 
-	if s.cfg.AIAPIKey != "" {
+	if s.cfg.AIAPIKey != "" && len(sources) == 0 && answer != aiTopicRefusal {
 		history, _ := s.repo.ListAIMessages(ctx, userID, session.ID)
 		safeContext := ""
-		if len(sources) > 0 {
-			safeContext = fallbackAnswer
-		}
 		if providerAnswer, err := s.askAIProvider(ctx, message, history, safeContext); err == nil && strings.TrimSpace(providerAnswer) != "" {
 			answer = providerAnswer
 		} else if err != nil {
@@ -876,11 +930,27 @@ func (s *Service) ensureAISession(ctx context.Context, userID, sessionID, messag
 
 func (s *Service) fallbackAI(ctx context.Context, userID, message string, meta RequestMeta) (string, []domain.AISource) {
 	lower := strings.ToLower(message)
+	if isPromptInjectionQuestion(lower) || isClearlyOffTopicQuestion(lower) {
+		return aiTopicRefusal, nil
+	}
+	if asksFoundedYear(lower) {
+		return "ГГНТУ основан в 1920 году. По официальной истории университета, 1 августа 1920 года Грозненский нефтяной техникум начал первый учебный год.", []domain.AISource{{Type: "ggntu_reference", ID: "history", Title: "История ГГНТУ"}}
+	}
+	if asksFullUniversityName(lower) {
+		return "Полное название: Грозненский государственный нефтяной технический университет имени академика М.Д. Миллионщикова.", []domain.AISource{{Type: "ggntu_reference", ID: "common", Title: "Справка о ГГНТУ"}}
+	}
 	if strings.Contains(lower, "аудитор") || regexp.MustCompile(`\b305\b`).MatchString(lower) {
 		rooms, _ := s.repo.SearchRooms(ctx, domain.RoomSearchFilter{Query: "305", Page: 1, PageSize: 3})
 		if len(rooms) > 0 {
 			room := rooms[0]
-			return fmt.Sprintf("%s находится в корпусе %s, этаж связан с аудиторией в навигации. Подсказка: %s", room.Number, room.BuildingID, room.NavigationHint),
+			location := room.Number
+			if navigation, err := s.repo.RoomNavigation(ctx, room.ID); err == nil {
+				location = fmt.Sprintf("%s находится в корпусе %s (%s), %s. Подсказка: %s",
+					room.Number, navigation.Building.Code, navigation.Building.Name, navigation.Floor.Name, navigation.NavigationHint)
+			} else if room.NavigationHint != "" {
+				location = fmt.Sprintf("%s: %s", room.Number, room.NavigationHint)
+			}
+			return location,
 				[]domain.AISource{{Type: "room", ID: room.ID, Title: room.Number}}
 		}
 	}
@@ -888,15 +958,24 @@ func (s *Service) fallbackAI(ctx context.Context, userID, message string, meta R
 	if group == "" {
 		group = meta.GroupName
 	}
-	if strings.Contains(lower, "групп") || group != "" {
-		from := time.Now().Add(-2 * time.Hour)
-		to := time.Now().Add(24 * time.Hour)
+	if strings.Contains(lower, "групп") || strings.Contains(lower, "распис") || strings.Contains(lower, "пар") || group != "" {
+		now := time.Now()
+		from := now.Add(-2 * time.Hour)
+		to := now.Add(24 * time.Hour)
+		if strings.Contains(lower, "сегодня") || strings.Contains(lower, "распис") || strings.Contains(lower, "пар") {
+			from = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+			to = from.Add(24 * time.Hour)
+		}
 		items, _ := s.repo.ListGroupSchedule(ctx, group, from, to)
 		if len(items) > 0 {
 			parts := make([]string, 0, len(items))
 			sources := make([]domain.AISource, 0, len(items))
 			for _, item := range items {
-				parts = append(parts, fmt.Sprintf("%s %s-%s", item.Title, item.StartsAt.Format("15:04"), item.EndsAt.Format("15:04")))
+				roomLabel := ""
+				if room, err := s.repo.GetRoom(ctx, item.RoomID); err == nil && room.Number != "" {
+					roomLabel = ", аудитория " + room.Number
+				}
+				parts = append(parts, fmt.Sprintf("%s %s-%s%s", item.Title, item.StartsAt.Format("15:04"), item.EndsAt.Format("15:04"), roomLabel))
 				sources = append(sources, domain.AISource{Type: "schedule", ID: item.ID, Title: item.Title})
 			}
 			return "Расписание группы " + group + ": " + strings.Join(parts, "; "), sources
@@ -915,6 +994,87 @@ func (s *Service) fallbackAI(ctx context.Context, userID, message string, meta R
 		return answer, sources
 	}
 	return "Я могу помочь найти аудиторию, расписание группы, свободное окно, книгу в библиотеке или FAQ для абитуриентов. Сформулируйте вопрос чуть конкретнее.", nil
+}
+
+const aiTopicRefusal = "Я помогаю только с вопросами про ГГНТУ — про факультеты, расписание, кампус, поступление и студенческую жизнь. Спросите что-нибудь об университете 🙂"
+
+func faqQueries(question string) []string {
+	lower := strings.ToLower(question)
+	queries := []string{question}
+	if strings.Contains(lower, "документ") || strings.Contains(lower, "паспорт") || strings.Contains(lower, "снилс") {
+		queries = append(queries, "документы", "паспорт", "снилс")
+	}
+	if strings.Contains(lower, "поступ") || strings.Contains(lower, "абитуриент") {
+		queries = append(queries, "поступление")
+	}
+	if strings.Contains(lower, "срок") || strings.Contains(lower, "когда") || strings.Contains(lower, "дедлайн") {
+		queries = append(queries, "сроки")
+	}
+	if strings.Contains(lower, "онлайн") || strings.Contains(lower, "госуслуг") {
+		queries = append(queries, "онлайн", "госуслуги")
+	}
+	return uniqueStrings(queries)
+}
+
+func uniqueStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		key := strings.ToLower(value)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func asksFoundedYear(lower string) bool {
+	return (strings.Contains(lower, "основан") || strings.Contains(lower, "создан") || strings.Contains(lower, "год основания")) &&
+		(strings.Contains(lower, "ггнту") || strings.Contains(lower, "университет"))
+}
+
+func asksFullUniversityName(lower string) bool {
+	return (strings.Contains(lower, "полностью") || strings.Contains(lower, "полное") || strings.Contains(lower, "расшифр")) &&
+		strings.Contains(lower, "ггнту")
+}
+
+func isPromptInjectionQuestion(lower string) bool {
+	patterns := []string{"забудь инструк", "игнорируй инструк", "system prompt", "системный промпт", "раскрой промпт", "покажи промпт"}
+	for _, pattern := range patterns {
+		if strings.Contains(lower, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func isClearlyOffTopicQuestion(lower string) bool {
+	if isUniversityTopic(lower) {
+		return false
+	}
+	offTopicPatterns := []string{"рецепт", "борщ", "погода", "биткоин", "крипт", "политик", "взлом", "напиши код", "программирован", "медицин", "финанс"}
+	for _, pattern := range offTopicPatterns {
+		if strings.Contains(lower, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func isUniversityTopic(lower string) bool {
+	topics := []string{"ггнту", "университет", "аудитор", "распис", "групп", "поступ", "абитуриент", "документ", "кампус", "библиотек", "книг", "общеж", "факульт", "институт", "пара", "пары", "егэ", "приемн", "приёмн"}
+	for _, topic := range topics {
+		if strings.Contains(lower, topic) {
+			return true
+		}
+	}
+	return false
 }
 
 const ggntuSystemPrompt = `Ты — виртуальный ассистент Грозненского государственного нефтяного технического университета имени академика М. Д. Миллионщикова (ГГНТУ), Грозный, Чеченская Республика. Тебя зовут «Помощник ГГНТУ».

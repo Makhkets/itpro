@@ -26,6 +26,7 @@ type Config struct {
 	AIAPIKey   string
 	AIBaseURL  string
 	AIModel    string
+	AIProxyURL string
 
 	ISUProxyURL string
 
@@ -60,6 +61,7 @@ func Load() Config {
 		AIAPIKey:   os.Getenv("AI_API_KEY"),
 		AIBaseURL:  os.Getenv("AI_BASE_URL"),
 		AIModel:    os.Getenv("AI_MODEL"),
+		AIProxyURL: strings.TrimSpace(os.Getenv("AI_PROXY_URL")),
 
 		ISUProxyURL: strings.TrimSpace(os.Getenv("ISU_PROXY_URL")),
 

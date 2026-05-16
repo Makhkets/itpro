@@ -14,3 +14,11 @@ func TestMaskPII(t *testing.T) {
 		}
 	}
 }
+
+func TestMaskPIIDoesNotCorruptDatesAndUUIDs(t *testing.T) {
+	input := "room 30000000-0000-0000-0000-000000000003 date 2026-05-16"
+	got := MaskPII(input)
+	if got != input {
+		t.Fatalf("non-PII technical values were changed: %s", got)
+	}
+}
