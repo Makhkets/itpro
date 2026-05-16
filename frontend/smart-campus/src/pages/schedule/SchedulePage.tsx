@@ -17,16 +17,32 @@ import { fmtDate, fmtTime } from "@/shared/lib/date";
 import type { Schedule } from "@/shared/api/types";
 import { cn } from "@/shared/lib/cn";
 
+type ScheduleType = "classes" | "exams";
+type SearchMode = "group" | "teacher";
+
 export default function SchedulePage() {
   const { user } = useAuth();
   const [view, setView] = useState<"today" | "week">("today");
-  const [group, setGroup] = useState(user?.groupName ?? "");
-  const form = useForm({ defaultValues: { group } });
+  const [scheduleType, setScheduleType] = useState<ScheduleType>("classes");
+  const [searchMode, setSearchMode] = useState<SearchMode>("group");
+  const [query, setQuery] = useState(user?.groupName ?? "");
+  const form = useForm({ defaultValues: { query: user?.groupName ?? "" } });
+
+  const fetchFn = useMemo(() => {
+    if (scheduleType === "exams") {
+      return searchMode === "group"
+        ? () => scheduleApi.examByGroup(query)
+        : () => scheduleApi.examByTeacher(query);
+    }
+    return searchMode === "group"
+      ? () => scheduleApi.byGroup(query)
+      : () => scheduleApi.byTeacher(query);
+  }, [scheduleType, searchMode, query]);
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["schedule", "byGroup", group],
-    queryFn: () => scheduleApi.byGroup(group),
-    enabled: !!group,
+    queryKey: ["schedule", scheduleType, searchMode, query],
+    queryFn: fetchFn,
+    enabled: !!query,
   });
 
   const filtered = useMemo(() => {
@@ -58,7 +74,7 @@ export default function SchedulePage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Расписание"
-        title="Занятия и пары"
+        title={scheduleType === "classes" ? "Занятия и пары" : "Расписание экзаменов"}
         subtitle="Данные обновляются из ИСУ ГГНТУ. Откройте маршрут, чтобы быстро найти аудиторию."
         actions={
           <Tabs
@@ -72,15 +88,38 @@ export default function SchedulePage() {
         }
       />
 
+      <div className="flex flex-wrap gap-2">
+        <Tabs
+          items={[
+            { key: "classes", label: "Занятия" },
+            { key: "exams", label: "Экзамены" },
+          ]}
+          value={scheduleType}
+          onChange={(k) => setScheduleType(k as ScheduleType)}
+        />
+        <Tabs
+          items={[
+            { key: "group", label: "По группе" },
+            { key: "teacher", label: "По преподавателю" },
+          ]}
+          value={searchMode}
+          onChange={(k) => setSearchMode(k as SearchMode)}
+        />
+      </div>
+
       <Card className="p-4 md:p-5">
         <form
           className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3"
-          onSubmit={form.handleSubmit((v) => setGroup(v.group))}
+          onSubmit={form.handleSubmit((v) => setQuery(v.query))}
         >
           <Input
-            placeholder="Группа, например ИСТ-25-2"
+            placeholder={
+              searchMode === "group"
+                ? "Группа, например ИСТ-б-о-22-1"
+                : "Фамилия преподавателя"
+            }
             leftIcon={<Search className="h-4 w-4" />}
-            {...form.register("group")}
+            {...form.register("query")}
           />
           <Button type="submit" variant="navy">
             Показать
@@ -97,12 +136,14 @@ export default function SchedulePage() {
       )}
       {!isLoading && !error && grouped.length === 0 && (
         <EmptyState
-          title={group ? "Занятий на выбранный период нет" : "Введите группу"}
+          title={query ? "Занятий на выбранный период нет" : searchMode === "group" ? "Введите группу" : "Введите фамилию преподавателя"}
           icon={<Calendar className="h-6 w-6" />}
           description={
-            group
-              ? "Возможно, выбран не тот период или группа не имеет расписания."
-              : "Укажите номер группы, чтобы увидеть расписание."
+            query
+              ? "Возможно, выбран не тот период или нет данных для данного запроса."
+              : searchMode === "group"
+                ? "Укажите номер группы, чтобы увидеть расписание."
+                : "Укажите фамилию преподавателя."
           }
         />
       )}
@@ -120,11 +161,11 @@ export default function SchedulePage() {
               {fmtDate(items[0].startsAt, "EEEE, d MMMM")}
             </span>
             <span className="h-px flex-1 bg-border" />
-            <Badge variant="muted">{items.length} занятий</Badge>
+            <Badge variant="muted">{items.length} {scheduleType === "exams" ? "экзаменов" : "занятий"}</Badge>
           </div>
           <div className="grid gap-3">
             {items.map((s) => (
-              <LessonCard key={s.id} s={s} />
+              <LessonCard key={s.id} s={s} isExam={scheduleType === "exams"} />
             ))}
           </div>
         </motion.div>
@@ -133,7 +174,7 @@ export default function SchedulePage() {
   );
 }
 
-function LessonCard({ s }: { s: Schedule }) {
+function LessonCard({ s, isExam }: { s: Schedule; isExam?: boolean }) {
   const now = Date.now();
   const isNow = now >= +new Date(s.startsAt) && now <= +new Date(s.endsAt);
   const isPast = now > +new Date(s.endsAt);
@@ -171,6 +212,7 @@ function LessonCard({ s }: { s: Schedule }) {
             <Badge variant="default">ауд. {s.roomNumber}</Badge>
           )}
           {s.source === "isu" && <Badge variant="info">ИСУ</Badge>}
+          {isExam && <Badge variant="burgundy">Экзамен</Badge>}
         </div>
       </div>
       <div className="flex flex-col gap-2 items-end">

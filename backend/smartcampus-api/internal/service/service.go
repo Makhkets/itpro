@@ -25,13 +25,14 @@ import (
 )
 
 type Service struct {
-	repo     *repository.Repository
-	redis    *redis.Client
-	cfg      config.Config
-	log      *logger.Logger
-	http     *http.Client
-	isu      *ISUClient
-	ipIntel  *security.IPIntelService
+	repo      *repository.Repository
+	redis     *redis.Client
+	cfg       config.Config
+	log       *logger.Logger
+	http      *http.Client
+	isu       *ISUClient
+	isuAuth   *ISUAuthClient
+	ipIntel   *security.IPIntelService
 	threatDet *security.ThreatDetector
 }
 
@@ -72,6 +73,7 @@ func New(repo *repository.Repository, redisClient *redis.Client, cfg config.Conf
 		log:       log,
 		http:      &http.Client{Timeout: 15 * time.Second},
 		isu:       NewISUClient(redisClient, cfg.ISUProxyURL),
+		isuAuth:   NewISUAuthClient(redisClient, log),
 		ipIntel:   security.NewIPIntelService(redisClient),
 		threatDet: security.NewThreatDetector(redisClient),
 	}
@@ -118,6 +120,220 @@ func (s *Service) Login(ctx context.Context, email, password string, meta Reques
 		return AuthResult{}, response.Internal("Could not issue token")
 	}
 	return AuthResult{User: user, Token: token}, nil
+}
+
+func (s *Service) LoginISU(ctx context.Context, username, password string, meta RequestMeta) (AuthResult, error) {
+	loginResult, err := s.isuAuth.Login(ctx, username, password)
+	if err != nil {
+		s.log.Error("isu_login_failed", "username", username, "error", err.Error())
+		return AuthResult{}, response.Unauthorized("ISU login failed: invalid credentials or service unavailable")
+	}
+
+	isuToken := loginResult.Token
+	profile := loginResult.Profile
+
+	// Build user data
+	fullName := profile.FullName
+	if fullName == "" {
+		fullName = "ISU User " + username
+	}
+	role := mapISURole(profile.Roles)
+	syntheticEmail := username + "@isu.gstou.ru"
+
+	// Generate random password hash (ISU users can't login with local password)
+	randomHash, _ := security.HashPassword(fmt.Sprintf("isu_%s_%d", username, time.Now().UnixNano()))
+
+	user, err := s.repo.UpsertUserByEmail(ctx, repository.CreateUserParams{
+		FullName:     fullName,
+		Email:        syntheticEmail,
+		PasswordHash: randomHash,
+		Role:         role,
+		GroupName:    profile.GroupName,
+		Department:   profile.Institute,
+	})
+	if err != nil {
+		s.log.Error("isu_user_upsert_failed", "error", err.Error())
+		return AuthResult{}, response.Internal("Could not create user account")
+	}
+
+	// Store ISU token in Redis for later BRS requests
+	s.isuAuth.SaveISUSession(ctx, user.ID, isuToken)
+
+	_ = s.Audit(ctx, RequestMeta{UserID: user.ID, IP: meta.IP, UserAgent: meta.UserAgent}, "isu_login", "user", user.ID, map[string]any{"isu_username": username})
+
+	token, err := s.tokenForUser(user)
+	if err != nil {
+		return AuthResult{}, response.Internal("Could not issue token")
+	}
+	return AuthResult{User: user, Token: token}, nil
+}
+
+func (s *Service) MyBRS(ctx context.Context, userID string, yearStart, yearEnd, semester int) (domain.BRSResult, error) {
+	isuToken, err := s.isuAuth.GetISUSession(ctx, userID)
+	if err != nil {
+		return domain.BRSResult{}, response.Unauthorized("ISU session expired — please login via ISU again")
+	}
+
+	grades, err := s.isuAuth.FetchGrades(ctx, isuToken, yearStart, yearEnd, semester)
+	if err != nil {
+		s.log.Error("isu_grades_failed", "userId", userID, "error", err.Error())
+		// Return empty result with error info instead of 502 so the page still loads
+		return domain.BRSResult{
+			Grades:      []domain.BRSGrade{},
+			SemesterNum: semester,
+			YearStart:   yearStart,
+			YearEnd:     yearEnd,
+			Error:       "ISU временно недоступен: " + err.Error(),
+		}, nil
+	}
+
+	return domain.BRSResult{
+		Grades:      grades,
+		SemesterNum: semester,
+		YearStart:   yearStart,
+		YearEnd:     yearEnd,
+	}, nil
+}
+
+// MyBRSJournal returns per-lesson attendance data for a specific discipline.
+func (s *Service) MyBRSJournal(ctx context.Context, userID string, disciplineID, yearStart, yearEnd, semester int) ([]domain.BRSJournalEntry, error) {
+	isuToken, err := s.isuAuth.GetISUSession(ctx, userID)
+	if err != nil {
+		return nil, response.Unauthorized("ISU session expired — please login via ISU again")
+	}
+	entries, err := s.isuAuth.FetchDisciplineJournal(ctx, isuToken, disciplineID, yearStart, yearEnd, semester)
+	if err != nil {
+		s.log.Error("isu_journal_failed", "userId", userID, "disciplineId", disciplineID, "error", err.Error())
+		return []domain.BRSJournalEntry{}, nil
+	}
+	return entries, nil
+}
+
+// GroupExamScheduleISU returns expanded exam schedule entries for a group from ISU.
+func (s *Service) GroupExamScheduleISU(ctx context.Context, groupName string, from, to time.Time) ([]domain.Schedule, error) {
+	from, to = s.defaultRange(from, to)
+	entries, err := s.isu.ByGroupExam(ctx, groupName)
+	if err != nil {
+		return nil, err
+	}
+	return buildSchedule(entries, from, to, s.resolveRoomLookup(ctx, entries)), nil
+}
+
+// TeacherExamScheduleISU returns expanded exam schedule entries for a teacher from ISU.
+func (s *Service) TeacherExamScheduleISU(ctx context.Context, teacherName string, from, to time.Time) ([]domain.Schedule, error) {
+	from, to = s.defaultRange(from, to)
+	entries, err := s.isu.ByTeacherExam(ctx, teacherName)
+	if err != nil {
+		return nil, err
+	}
+	return buildSchedule(entries, from, to, s.resolveRoomLookup(ctx, entries)), nil
+}
+
+// ISUInstitutes returns the list of ISU institutes.
+func (s *Service) ISUInstitutes(ctx context.Context) (json.RawMessage, error) {
+	return s.isu.Institutes(ctx)
+}
+
+// MyStudentSchedule returns the student's personal timetable via ISU auth session.
+func (s *Service) MyStudentSchedule(ctx context.Context, userID string) (json.RawMessage, error) {
+	isuToken, err := s.isuAuth.GetISUSession(ctx, userID)
+	if err != nil {
+		return nil, response.Unauthorized("ISU session expired — please login via ISU again")
+	}
+	return s.isuAuth.FetchStudentSchedule(ctx, isuToken)
+}
+
+// MyStudentExamSchedule returns the student's personal exam schedule via ISU auth session.
+func (s *Service) MyStudentExamSchedule(ctx context.Context, userID string) (json.RawMessage, error) {
+	isuToken, err := s.isuAuth.GetISUSession(ctx, userID)
+	if err != nil {
+		return nil, response.Unauthorized("ISU session expired — please login via ISU again")
+	}
+	return s.isuAuth.FetchStudentExamSchedule(ctx, isuToken)
+}
+
+// MyBRSProfile returns the student's BRS profile from ISU.
+func (s *Service) MyBRSProfile(ctx context.Context, userID string, yearStart, yearEnd, semester int) (json.RawMessage, error) {
+	isuToken, err := s.isuAuth.GetISUSession(ctx, userID)
+	if err != nil {
+		return nil, response.Unauthorized("ISU session expired — please login via ISU again")
+	}
+	return s.isuAuth.FetchBRSProfile(ctx, isuToken, yearStart, yearEnd, semester)
+}
+
+// MyBRSSpecializationAvg returns the student's specialization average from ISU.
+func (s *Service) MyBRSSpecializationAvg(ctx context.Context, userID string, yearStart, yearEnd, semester int) (json.RawMessage, error) {
+	isuToken, err := s.isuAuth.GetISUSession(ctx, userID)
+	if err != nil {
+		return nil, response.Unauthorized("ISU session expired — please login via ISU again")
+	}
+	return s.isuAuth.FetchBRSSpecializationAverage(ctx, isuToken, yearStart, yearEnd, semester)
+}
+
+// MyBRSDisciplines returns the student's BRS disciplines from ISU.
+func (s *Service) MyBRSDisciplines(ctx context.Context, userID string, yearStart, yearEnd, semester int) (json.RawMessage, error) {
+	isuToken, err := s.isuAuth.GetISUSession(ctx, userID)
+	if err != nil {
+		return nil, response.Unauthorized("ISU session expired — please login via ISU again")
+	}
+	return s.isuAuth.FetchBRSDisciplines(ctx, isuToken, yearStart, yearEnd, semester)
+}
+
+// MyTeacherSchedule returns the teacher's personal timetable via ISU auth session.
+func (s *Service) MyTeacherSchedule(ctx context.Context, userID string) (json.RawMessage, error) {
+	isuToken, err := s.isuAuth.GetISUSession(ctx, userID)
+	if err != nil {
+		return nil, response.Unauthorized("ISU session expired — please login via ISU again")
+	}
+	return s.isuAuth.FetchTeacherSchedule(ctx, isuToken)
+}
+
+// MyTeacherExamSchedule returns the teacher's exam schedule via ISU auth session.
+func (s *Service) MyTeacherExamSchedule(ctx context.Context, userID string) (json.RawMessage, error) {
+	isuToken, err := s.isuAuth.GetISUSession(ctx, userID)
+	if err != nil {
+		return nil, response.Unauthorized("ISU session expired — please login via ISU again")
+	}
+	return s.isuAuth.FetchTeacherExamSchedule(ctx, isuToken)
+}
+
+// MyContracts returns the user's contracts from ISU.
+func (s *Service) MyContracts(ctx context.Context, userID string) (json.RawMessage, error) {
+	isuToken, err := s.isuAuth.GetISUSession(ctx, userID)
+	if err != nil {
+		return nil, response.Unauthorized("ISU session expired — please login via ISU again")
+	}
+	return s.isuAuth.FetchContracts(ctx, isuToken)
+}
+
+// ContractsYears returns available contract years from ISU.
+func (s *Service) ContractsYears(ctx context.Context, userID string) (json.RawMessage, error) {
+	isuToken, err := s.isuAuth.GetISUSession(ctx, userID)
+	if err != nil {
+		return nil, response.Unauthorized("ISU session expired — please login via ISU again")
+	}
+	return s.isuAuth.FetchContractsYears(ctx, isuToken)
+}
+
+// MyISURoles returns the user's ISU roles.
+func (s *Service) MyISURoles(ctx context.Context, userID string) (json.RawMessage, error) {
+	isuToken, err := s.isuAuth.GetISUSession(ctx, userID)
+	if err != nil {
+		return nil, response.Unauthorized("ISU session expired — please login via ISU again")
+	}
+	return s.isuAuth.FetchUserRoles(ctx, isuToken)
+}
+
+func mapISURole(roles []string) string {
+	for _, r := range roles {
+		switch r {
+		case "teacher":
+			return "teacher"
+		case "admin", "super":
+			return "admin"
+		}
+	}
+	return "student"
 }
 
 func (s *Service) UpdateConsent(ctx context.Context, userID string, consent bool, meta RequestMeta) (ConsentResult, error) {

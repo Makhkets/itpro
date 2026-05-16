@@ -23,6 +23,8 @@ const RoomAvailabilityPage = lazy(() => import("@/pages/rooms/RoomAvailabilityPa
 const NavigationPage = lazy(() => import("@/pages/navigation/NavigationPage"));
 const MyBookingsPage = lazy(() => import("@/pages/bookings/MyBookingsPage"));
 const CreateBookingPage = lazy(() => import("@/pages/bookings/CreateBookingPage"));
+const BRSPage = lazy(() => import("@/pages/brs/BRSPage"));
+const InstitutesPage = lazy(() => import("@/pages/institutes/InstitutesPage"));
 const AttendanceMyPage = lazy(() => import("@/pages/attendance/AttendanceMyPage"));
 const AttendanceAnalyticsPage = lazy(() => import("@/pages/attendance/AttendanceAnalyticsPage"));
 const LibraryPage = lazy(() => import("@/pages/library/LibraryPage"));
@@ -101,6 +103,7 @@ export default function App() {
           <Route path="/ai" element={<AiPage />} />
 
           {/* Student */}
+          <Route path="/brs" element={<BRSPage />} />
           <Route path="/schedule" element={<SchedulePage />} />
           <Route path="/schedule/current" element={<ScheduleCurrentPage />} />
           <Route path="/rooms" element={<RoomsPage />} />
@@ -111,6 +114,7 @@ export default function App() {
           <Route path="/bookings/create" element={<CreateBookingPage />} />
           <Route path="/attendance/my" element={<AttendanceMyPage />} />
           <Route path="/attendance/analytics" element={<AttendanceAnalyticsPage />} />
+          <Route path="/institutes" element={<InstitutesPage />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/library/books/:id" element={<LibraryBookPage />} />
           <Route path="/library/loans/my" element={<LibraryLoansMyPage />} />

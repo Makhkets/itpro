@@ -454,6 +454,52 @@ export interface TelegramLinkStart {
   command: string;
 }
 
+// ---------- ISU / BRS ----------
+
+export interface ISULoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface BRSGrade {
+  disciplineId: number;
+  disciplineName: string;
+  teacherName: string;
+  att1Current: number;
+  att1Border: number;
+  att2Current: number;
+  att2Border: number;
+  attendance: number;
+  independentWork: number;
+  retake: number;
+  bonus: number;
+  total: number;
+  examType: string;
+  isOpen1: boolean;
+  isOpen2: boolean;
+}
+
+export interface BRSJournalEntry {
+  pk: number;
+  attended: boolean;
+  date: string;
+  grade: number;
+}
+
+export interface BRSResult {
+  grades: BRSGrade[];
+  semesterNum: number;
+  yearStart: number;
+  yearEnd: number;
+  error?: string;
+}
+
+export interface ISUInstitute {
+  id: number;
+  unit: string;
+  name: string;
+}
+
 export interface Paginated<T> {
   items: T[];
   page: number;

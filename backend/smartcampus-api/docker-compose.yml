@@ -2,6 +2,11 @@ services:
   api:
     build: .
     container_name: smartcampus-api
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    extra_hosts:
+      - "backend-isu.gstou.ru:31.173.210.220"
     env_file:
       - .env
     environment:
