@@ -61,7 +61,7 @@ export function getNavigation(role: Role): NavGroup[] {
         title: "Учёба",
         items: [
           { to: "/brs", label: "БРС", icon: GraduationCap },
-          { to: "/attendance/my", label: "Посещаемость", icon: ClipboardCheck },
+          { to: "/analytics", label: "Аналитика учёбы", icon: BarChart3 },
         ],
       },
       {

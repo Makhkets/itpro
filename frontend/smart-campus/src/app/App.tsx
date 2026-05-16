@@ -27,6 +27,7 @@ const BRSPage = lazy(() => import("@/pages/brs/BRSPage"));
 const InstitutesPage = lazy(() => import("@/pages/institutes/InstitutesPage"));
 const AttendanceMyPage = lazy(() => import("@/pages/attendance/AttendanceMyPage"));
 const AttendanceAnalyticsPage = lazy(() => import("@/pages/attendance/AttendanceAnalyticsPage"));
+const AcademicAnalyticsPage = lazy(() => import("@/pages/analytics/AcademicAnalyticsPage"));
 const LibraryPage = lazy(() => import("@/pages/library/LibraryPage"));
 const LibraryBookPage = lazy(() => import("@/pages/library/LibraryBookPage"));
 const LibraryLoansMyPage = lazy(() => import("@/pages/library/LibraryLoansMyPage"));
@@ -114,6 +115,7 @@ export default function App() {
           <Route path="/bookings/create" element={<CreateBookingPage />} />
           <Route path="/attendance/my" element={<AttendanceMyPage />} />
           <Route path="/attendance/analytics" element={<AttendanceAnalyticsPage />} />
+          <Route path="/analytics" element={<AcademicAnalyticsPage />} />
           <Route path="/institutes" element={<InstitutesPage />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/library/books/:id" element={<LibraryBookPage />} />
