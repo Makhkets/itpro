@@ -30,10 +30,17 @@ export function setUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn;
 }
 
+function isExternalSessionError(err: AxiosError) {
+  const body = err.response?.data as
+    | { error?: { message?: string } }
+    | undefined;
+  return body?.error?.message?.toLowerCase().includes("isu session expired");
+}
+
 apiClient.interceptors.response.use(
   (res) => res,
   (err: AxiosError) => {
-    if (err.response?.status === 401) {
+    if (err.response?.status === 401 && !isExternalSessionError(err)) {
       tokenStorage.clear();
       onUnauthorized?.();
     }

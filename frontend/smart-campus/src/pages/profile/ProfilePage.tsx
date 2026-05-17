@@ -31,12 +31,13 @@ export default function ProfilePage() {
   const me = useQuery({ queryKey: ["me"], queryFn: () => usersApi.me() });
   const u = me.data ?? user;
   const [cardOpen, setCardOpen] = useState(false);
+  const isStudent = u?.role === "student";
 
   // Fetch BRS profile to get group/department if missing
   const { data: brsProfile } = useQuery({
     queryKey: ["brs-profile-enrich"],
     queryFn: () => brsApi.profile(),
-    enabled: !!u && (!u.groupName || !u.department),
+    enabled: isStudent && (!u?.groupName || !u?.department),
     retry: false,
   });
 
@@ -74,13 +75,15 @@ export default function ProfilePage() {
                 <Badge variant="muted">{abbrev(displayDept)}</Badge>
               )}
             </div>
-            <button
-              onClick={() => setCardOpen(true)}
-              className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-burgundy text-white text-sm font-medium hover:bg-burgundy-dark transition-colors shadow-sm"
-            >
-              <CreditCard className="h-4 w-4" />
-              Карточка студента
-            </button>
+            {isStudent && (
+              <button
+                onClick={() => setCardOpen(true)}
+                className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-burgundy text-white text-sm font-medium hover:bg-burgundy-dark transition-colors shadow-sm"
+              >
+                <CreditCard className="h-4 w-4" />
+                Карточка студента
+              </button>
+            )}
           </div>
         </div>
       </Card>

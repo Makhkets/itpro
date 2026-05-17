@@ -22,12 +22,13 @@ type SearchMode = "group" | "teacher";
 
 export default function SchedulePage() {
   const { user } = useAuth();
+  const isStudent = user?.role === "student";
 
   // Fetch BRS profile to get groupName if not in auth store
   const { data: brsProfile } = useQuery({
     queryKey: ["brs-profile-group"],
     queryFn: () => brsApi.profile(),
-    enabled: !user?.groupName,
+    enabled: isStudent && !user?.groupName,
     retry: false,
   });
 
