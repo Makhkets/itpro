@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AtSign,
@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/features/auth/store";
-import { usersApi } from "@/shared/api/modules";
+import { usersApi, brsApi } from "@/shared/api/modules";
 import { PageHeader } from "@/shared/ui/page-header";
 import { Card } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
@@ -20,11 +20,38 @@ import { ROLE_LABEL } from "@/shared/lib/role";
 import { fmtDate } from "@/shared/lib/date";
 import { StudentCard } from "@/features/student-card/StudentCard";
 
+function abbrev(name: string): string {
+  const words = name.split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return name;
+  return words.map((w) => w[0].toUpperCase()).join("");
+}
+
 export default function ProfilePage() {
   const { user } = useAuth();
   const me = useQuery({ queryKey: ["me"], queryFn: () => usersApi.me() });
   const u = me.data ?? user;
   const [cardOpen, setCardOpen] = useState(false);
+
+  // Fetch BRS profile to get group/department if missing
+  const { data: brsProfile } = useQuery({
+    queryKey: ["brs-profile-enrich"],
+    queryFn: () => brsApi.profile(),
+    enabled: !!u && (!u.groupName || !u.department),
+    retry: false,
+  });
+
+  const enriched = useMemo(() => {
+    if (!brsProfile || typeof brsProfile !== "object") return { groupName: "", department: "" };
+    const p = brsProfile as Record<string, unknown>;
+    return {
+      groupName: (p.group_name ?? p.groupName ?? p.group ?? "") as string,
+      department: (p.institute ?? p.department ?? p.faculty ?? "") as string,
+    };
+  }, [brsProfile]);
+
+  const displayGroup = u?.groupName || enriched.groupName;
+  const displayDept = u?.department || enriched.department;
+
   if (!u) return null;
 
   return (
@@ -42,9 +69,9 @@ export default function ProfilePage() {
             <h2 className="font-display text-3xl text-navy">{u.fullName}</h2>
             <div className="mt-2 flex flex-wrap gap-2">
               <Badge variant="burgundy">{ROLE_LABEL[u.role]}</Badge>
-              {u.groupName && <Badge variant="default">Группа · {u.groupName}</Badge>}
-              {u.department && (
-                <Badge variant="muted">{u.department}</Badge>
+              {displayGroup && <Badge variant="default">Группа · {displayGroup}</Badge>}
+              {displayDept && (
+                <Badge variant="muted">{abbrev(displayDept)}</Badge>
               )}
             </div>
             <button
@@ -67,18 +94,18 @@ export default function ProfilePage() {
           label="Роль"
           value={ROLE_LABEL[u.role]}
         />
-        {u.groupName && (
+        {displayGroup && (
           <InfoRow
             icon={<GraduationCap className="h-4 w-4" />}
             label="Группа"
-            value={u.groupName}
+            value={displayGroup}
           />
         )}
-        {u.department && (
+        {displayDept && (
           <InfoRow
             icon={<Building2 className="h-4 w-4" />}
-            label="Подразделение"
-            value={u.department}
+            label="Факультет"
+            value={`${abbrev(displayDept)} — ${displayDept}`}
           />
         )}
         <InfoRow

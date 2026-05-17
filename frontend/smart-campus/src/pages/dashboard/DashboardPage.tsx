@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -7,16 +8,24 @@ import {
   Bot,
   Calendar,
   ClipboardCheck,
+  Cloud,
+  CloudDrizzle,
+  CloudRain,
+  CloudSnow,
   DoorOpen,
+  Droplets,
   Library,
   Map,
   Sparkles,
+  Sun,
+  Thermometer,
+  Wind,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/features/auth/store";
 import {
   analyticsApi,
-  attendanceApi,
+  brsApi,
   notificationsApi,
   scheduleApi,
 } from "@/shared/api/modules";
@@ -27,6 +36,7 @@ import { LoadingState } from "@/shared/ui/states";
 import { ROLE_LABEL } from "@/shared/lib/role";
 import { fmtRelative, fmtTime } from "@/shared/lib/date";
 import { cn } from "@/shared/lib/cn";
+import type { BRSGrade } from "@/shared/api/types";
 
 const QUICK_ACTIONS = {
   student: [
@@ -60,6 +70,82 @@ const QUICK_ACTIONS = {
   ],
 } as const;
 
+function currentAcademicYear() {
+  const now = new Date();
+  const month = now.getMonth();
+  const year = now.getFullYear();
+  if (month >= 8) return { start: year, end: year + 1, sem: 1 };
+  if (month >= 1 && month <= 6) return { start: year - 1, end: year, sem: 2 };
+  return { start: year - 1, end: year, sem: 1 };
+}
+
+interface WeatherData {
+  temp: number;
+  feelsLike: number;
+  humidity: number;
+  windSpeed: number;
+  weatherCode: number;
+}
+
+function useWeather() {
+  return useQuery<WeatherData>({
+    queryKey: ["weather", "grozny"],
+    queryFn: async () => {
+      const res = await fetch(
+        "https://api.open-meteo.com/v1/forecast?latitude=43.3169&longitude=45.6981&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&timezone=Europe%2FMoscow"
+      );
+      const json = await res.json();
+      const c = json.current;
+      return {
+        temp: Math.round(c.temperature_2m),
+        feelsLike: Math.round(c.apparent_temperature),
+        humidity: c.relative_humidity_2m,
+        windSpeed: Math.round(c.wind_speed_10m),
+        weatherCode: c.weather_code,
+      };
+    },
+    staleTime: 15 * 60_000,
+    refetchInterval: 15 * 60_000,
+  });
+}
+
+function weatherIcon(code: number) {
+  if (code <= 1) return <Sun className="h-8 w-8 text-amber-400" />;
+  if (code <= 3) return <Cloud className="h-8 w-8 text-slate-400" />;
+  if (code >= 51 && code <= 57) return <CloudDrizzle className="h-8 w-8 text-blue-400" />;
+  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return <CloudRain className="h-8 w-8 text-blue-500" />;
+  if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return <CloudSnow className="h-8 w-8 text-sky-300" />;
+  return <Cloud className="h-8 w-8 text-slate-400" />;
+}
+
+function weatherLabel(code: number): string {
+  if (code === 0) return "Ясно";
+  if (code <= 3) return "Облачно";
+  if (code >= 51 && code <= 57) return "Морось";
+  if (code >= 61 && code <= 65) return "Дождь";
+  if (code === 66 || code === 67) return "Ледяной дождь";
+  if (code >= 71 && code <= 77) return "Снег";
+  if (code >= 80 && code <= 82) return "Ливень";
+  if (code >= 85 && code <= 86) return "Снегопад";
+  if (code >= 95) return "Гроза";
+  return "Облачно";
+}
+
+function weatherAdvice(w: WeatherData): string {
+  const { temp, weatherCode, windSpeed } = w;
+  if (weatherCode >= 61 && weatherCode <= 67) return "Прихватите зонтик ☔";
+  if (weatherCode >= 80 && weatherCode <= 82) return "Сильный дождь — лучше взять зонт и непромокаемую обувь";
+  if (weatherCode >= 71 && weatherCode <= 77) return "Оденьтесь потеплее, снег! ❄️";
+  if (weatherCode >= 85 && weatherCode <= 86) return "Снегопад — тёплая одежда обязательна";
+  if (weatherCode >= 95) return "Гроза — лучше переждать в помещении";
+  if (weatherCode >= 51 && weatherCode <= 57) return "Моросит — легкий дождевик не помешает";
+  if (temp <= 0) return "Мороз! Оденьтесь потеплее и не забудьте перчатки 🧤";
+  if (temp <= 10) return "Прохладно — куртка будет кстати";
+  if (temp >= 30) return "Жарко! Не забудьте воду 💧";
+  if (windSpeed > 35) return "Сильный ветер — будьте аккуратнее на улице";
+  return "Отличная погода для учёбы! ☀️";
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   if (!user) return null;
@@ -72,13 +158,18 @@ export default function DashboardPage() {
     queryKey: ["schedule", "current"],
     queryFn: () => scheduleApi.current(),
     enabled: isStudent || isTeacher,
+    refetchInterval: 60_000,
   });
 
-  const myAttendance = useQuery({
-    queryKey: ["attendance", "my", "analytics"],
-    queryFn: () => attendanceApi.myAnalytics(),
+  const acadYear = currentAcademicYear();
+  const brs = useQuery({
+    queryKey: ["brs", "dash", acadYear.start, acadYear.end, acadYear.sem],
+    queryFn: () => brsApi.my({ yearStart: acadYear.start, yearEnd: acadYear.end, semester: acadYear.sem }),
     enabled: isStudent,
+    staleTime: 5 * 60_000,
   });
+
+  const weather = useWeather();
 
   const notifs = useQuery({
     queryKey: ["notifications", "dash"],
@@ -92,8 +183,22 @@ export default function DashboardPage() {
   });
 
   const greeting = useGreeting();
+  const [mskTime, setMskTime] = useState(getMskTime());
+  useEffect(() => {
+    const t = setInterval(() => setMskTime(getMskTime()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
   const actions =
     QUICK_ACTIONS[user.role as keyof typeof QUICK_ACTIONS] ?? QUICK_ACTIONS.student;
+
+  const brsGrades = brs.data?.grades ?? [];
+  const avgScore = brsGrades.length
+    ? Math.round(brsGrades.reduce((s: number, g: BRSGrade) => s + g.total, 0) / brsGrades.length)
+    : 0;
+  const minGrade = brsGrades.length
+    ? brsGrades.reduce((m: BRSGrade, g: BRSGrade) => (g.total < m.total ? g : m), brsGrades[0])
+    : null;
 
   return (
     <div className="space-y-8">
@@ -101,7 +206,7 @@ export default function DashboardPage() {
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-navy via-[#1f2a47] to-navy-950 text-white p-8 md:p-10"
+        className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-navy via-[#1f2a47] to-navy-950 text-white p-5 sm:p-8 md:p-10"
       >
         <div className="absolute inset-0 hero-lines opacity-60" />
         <div className="absolute -top-32 -right-24 h-80 w-80 rounded-full bg-burgundy/30 blur-3xl" />
@@ -113,41 +218,53 @@ export default function DashboardPage() {
               {greeting} · {ROLE_LABEL[user.role]}
               {user.groupName ? ` · ${user.groupName}` : ""}
             </div>
-            <h1 className="font-display text-4xl md:text-5xl leading-[1.05]">
+            <h1 className="font-display text-2xl sm:text-4xl md:text-5xl leading-[1.05]">
               {user.fullName.split(" ").slice(0, 2).join(" ")},
             </h1>
-            <p className="font-display text-3xl md:text-4xl text-white/70 mt-1">
+            <p className="font-display text-xl sm:text-3xl md:text-4xl text-white/70 mt-1">
               добро пожаловать в SmartCampus.
             </p>
+
+            {/* Current / Next lesson — MSK time aware */}
             {current.data?.currentLesson && (
-              <div className="mt-6 inline-flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/10 border border-white/15">
-                <span className="h-2 w-2 rounded-full bg-burgundy animate-pulse" />
-                <div>
-                  <div className="text-xs text-white/60">Сейчас идёт</div>
-                  <div className="text-sm font-medium">
+              <div className="mt-4 sm:mt-6 flex items-center gap-3 px-3 sm:px-4 py-2.5 rounded-xl bg-white/10 border border-white/15">
+                <span className="h-2 w-2 rounded-full bg-burgundy animate-pulse shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-[11px] sm:text-xs text-white/60">Сейчас идёт · {mskTime} МСК</div>
+                  <div className="text-xs sm:text-sm font-medium truncate">
                     {current.data.currentLesson.title} ·{" "}
                     {fmtTime(current.data.currentLesson.startsAt)}–
                     {fmtTime(current.data.currentLesson.endsAt)}
-                    {current.data.currentLesson.room?.number
-                      ? ` · ауд. ${current.data.currentLesson.room.number}`
-                      : ""}
+                    {current.data.currentLesson.roomNumber
+                      ? ` · ауд. ${current.data.currentLesson.roomNumber}`
+                      : current.data.currentLesson.room?.number
+                        ? ` · ауд. ${current.data.currentLesson.room.number}`
+                        : ""}
                   </div>
                 </div>
               </div>
             )}
             {!current.data?.currentLesson && current.data?.nextLesson && (
-              <div className="mt-6 inline-flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10">
-                <Calendar className="h-4 w-4 text-burgundy" />
-                <div>
-                  <div className="text-xs text-white/60">Следующая пара</div>
-                  <div className="text-sm font-medium">
+              <div className="mt-4 sm:mt-6 flex items-center gap-3 px-3 sm:px-4 py-2.5 rounded-xl bg-white/5 border border-white/10">
+                <Calendar className="h-4 w-4 text-burgundy shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-[11px] sm:text-xs text-white/60">Следующая пара · {mskTime} МСК</div>
+                  <div className="text-xs sm:text-sm font-medium truncate">
                     {current.data.nextLesson.title} ·{" "}
                     {fmtTime(current.data.nextLesson.startsAt)}
-                    {current.data.nextLesson.room?.number
-                      ? ` · ауд. ${current.data.nextLesson.room.number}`
-                      : ""}
+                    {current.data.nextLesson.roomNumber
+                      ? ` · ауд. ${current.data.nextLesson.roomNumber}`
+                      : current.data.nextLesson.room?.number
+                        ? ` · ауд. ${current.data.nextLesson.room.number}`
+                        : ""}
                   </div>
                 </div>
+              </div>
+            )}
+            {!current.data?.currentLesson && !current.data?.nextLesson && (isStudent || isTeacher) && !current.isLoading && (
+              <div className="mt-4 sm:mt-6 flex items-center gap-3 px-3 sm:px-4 py-2.5 rounded-xl bg-white/5 border border-white/10">
+                <Calendar className="h-4 w-4 text-white/40 shrink-0" />
+                <div className="text-xs sm:text-sm text-white/60">Сегодня пар нет — свободный день!</div>
               </div>
             )}
           </div>
@@ -166,7 +283,7 @@ export default function DashboardPage() {
       {/* Quick actions */}
       <div>
         <h2 className="font-display text-xl text-navy mb-3">Быстрые действия</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
           {actions.map((a, i) => (
             <motion.div
               key={a.to}
@@ -177,7 +294,7 @@ export default function DashboardPage() {
               <Link
                 to={a.to}
                 className={cn(
-                  "group relative overflow-hidden block rounded-2xl p-5 h-full border transition-all hover:-translate-y-0.5",
+                  "group relative overflow-hidden block rounded-xl sm:rounded-2xl p-4 sm:p-5 h-full border transition-all hover:-translate-y-0.5",
                   a.tone === "burgundy" &&
                     "bg-burgundy text-white border-transparent hover:shadow-card-hover",
                   a.tone === "navy" &&
@@ -188,7 +305,7 @@ export default function DashboardPage() {
               >
                 <a.icon
                   className={cn(
-                    "h-6 w-6 mb-6 opacity-80",
+                    "h-5 w-5 sm:h-6 sm:w-6 mb-4 sm:mb-6 opacity-80",
                     a.tone === "white" && "text-burgundy",
                   )}
                 />
@@ -201,41 +318,41 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
-        {/* Right column wider */}
+        {/* Main column */}
         <div className="lg:col-span-2 space-y-5">
-          {/* Stats per role */}
-          {isStudent && myAttendance.data && (
+          {/* Student BRS stats (real data) */}
+          {isStudent && brsGrades.length > 0 && (
             <div className="grid sm:grid-cols-3 gap-3">
               <StatCard
                 tone="burgundy"
-                label="Посещаемость"
-                value={`${Math.round(myAttendance.data.attendancePercent)}%`}
-                delta={
-                  myAttendance.data.summary
-                    ? `${myAttendance.data.summary.present} / ${myAttendance.data.summary.totalRecords} занятий`
-                    : undefined
-                }
+                label="Средний балл БРС"
+                value={avgScore}
+                delta={`${brsGrades.length} дисциплин в семестре`}
                 icon={<ClipboardCheck className="h-5 w-5" />}
               />
               <StatCard
                 tone="navy"
-                label="Баллы семестра"
-                value={myAttendance.data.currentPoints}
-                delta={
-                  myAttendance.data.policy
-                    ? `Допуск от ${myAttendance.data.policy.admissionMinPoints}`
-                    : undefined
-                }
+                label="Минимальный балл"
+                value={minGrade?.total ?? "—"}
+                delta={minGrade ? minGrade.disciplineName : undefined}
               />
               <StatCard
-                label="Статус допуска"
-                value={
-                  <span className="text-xl">
-                    {admissionLabel(myAttendance.data.admissionStatus)}
-                  </span>
+                label="Дисциплин"
+                value={brsGrades.length}
+                delta={
+                  brsGrades.filter((g: BRSGrade) => g.total >= 60).length ===
+                  brsGrades.length
+                    ? "Все предметы в норме \u2714"
+                    : `${brsGrades.filter((g: BRSGrade) => g.total < 60).length} ниже 60 баллов`
                 }
-                delta={myAttendance.data.recommendation}
               />
+            </div>
+          )}
+          {isStudent && brs.isLoading && (
+            <div className="grid sm:grid-cols-3 gap-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-28 rounded-2xl bg-surface-alt animate-pulse" />
+              ))}
             </div>
           )}
 
@@ -264,9 +381,9 @@ export default function DashboardPage() {
           {/* Schedule preview */}
           {(isStudent || isTeacher) && (
             <Card className="overflow-hidden">
-              <div className="px-6 py-4 flex items-center justify-between border-b border-border">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-border">
                 <div>
-                  <p className="font-semibold text-navy">Расписание сегодня</p>
+                  <p className="font-semibold text-navy text-sm sm:text-base">Расписание сегодня</p>
                   <p className="text-xs text-muted mt-0.5">
                     Источник: ИСУ ГГНТУ
                   </p>
@@ -284,10 +401,10 @@ export default function DashboardPage() {
 
           {/* Notifications */}
           <Card>
-            <div className="px-6 py-4 flex items-center justify-between border-b border-border">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-border">
               <div className="flex items-center gap-2">
                 <Bell className="h-4 w-4 text-burgundy" />
-                <p className="font-semibold text-navy">Уведомления</p>
+                <p className="font-semibold text-navy text-sm sm:text-base">Уведомления</p>
               </div>
               <Link
                 to="/notifications"
@@ -303,7 +420,7 @@ export default function DashboardPage() {
                 </div>
               )}
               {notifs.data?.slice(0, 5).map((n) => (
-                <div key={n.id} className="px-6 py-4 flex items-start gap-3">
+                <div key={n.id} className="px-4 sm:px-6 py-3 sm:py-4 flex items-start gap-3">
                   {!n.isRead && (
                     <span className="mt-2 h-2 w-2 rounded-full bg-burgundy shrink-0" />
                   )}
@@ -334,6 +451,8 @@ export default function DashboardPage() {
 
         {/* Sidebar column */}
         <div className="space-y-5">
+          {/* Weather card */}
+          <WeatherCard weather={weather.data} isLoading={weather.isLoading} />
           <AssistantTeaser />
           <CampusInfoCard />
         </div>
@@ -380,9 +499,9 @@ function SchedulePreview() {
       {today.slice(0, 4).map((s) => (
         <div
           key={s.id}
-          className="px-6 py-4 flex items-center gap-4 hover:bg-surface-subtle transition-colors"
+          className="px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 sm:gap-4 hover:bg-surface-subtle transition-colors"
         >
-          <div className="text-center w-14 shrink-0">
+          <div className="text-center w-12 sm:w-14 shrink-0">
             <div className="font-display text-lg leading-none text-navy">
               {fmtTime(s.startsAt)}
             </div>
@@ -459,22 +578,76 @@ function CampusInfoCard() {
   );
 }
 
+function WeatherCard({ weather, isLoading }: { weather?: WeatherData; isLoading: boolean }) {
+  if (isLoading) {
+    return (
+      <Card className="p-6">
+        <div className="h-32 animate-pulse rounded-xl bg-surface-alt" />
+      </Card>
+    );
+  }
+  if (!weather) return null;
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.18em] text-burgundy font-semibold mb-2">
+              Погода в Грозном
+            </div>
+            <div className="font-display text-4xl text-navy">
+              {weather.temp}°C
+            </div>
+            <p className="text-sm text-muted mt-1">{weatherLabel(weather.weatherCode)}</p>
+          </div>
+          <div className="mt-1">{weatherIcon(weather.weatherCode)}</div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 mt-4">
+          <div className="flex items-center gap-1.5 text-xs text-muted">
+            <Thermometer className="h-3.5 w-3.5" />
+            <span>Ощ. {weather.feelsLike}°</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-muted">
+            <Droplets className="h-3.5 w-3.5" />
+            <span>{weather.humidity}%</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-muted">
+            <Wind className="h-3.5 w-3.5" />
+            <span>{weather.windSpeed} км/ч</span>
+          </div>
+        </div>
+
+        <div className="mt-4 px-3 py-2.5 rounded-xl bg-burgundy/5 border border-burgundy/10">
+          <p className="text-xs text-burgundy/90 font-medium">
+            {weatherAdvice(weather)}
+          </p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function getMskTime() {
+  return new Date().toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Moscow",
+  });
+}
+
 function useGreeting() {
-  const h = new Date().getHours();
+  const h = parseInt(
+    new Date().toLocaleTimeString("en-US", {
+      hour: "numeric",
+      hour12: false,
+      timeZone: "Europe/Moscow",
+    }),
+    10,
+  );
   if (h < 6) return "Доброй ночи";
   if (h < 12) return "Доброе утро";
   if (h < 18) return "Добрый день";
   return "Добрый вечер";
-}
-
-function admissionLabel(s: string) {
-  return (
-    {
-      admitted: "Допущен",
-      attendance_risk: "Риск посещ.",
-      points_risk: "Риск баллов",
-      not_admitted: "Не допущен",
-      no_data: "Нет данных",
-    }[s] ?? s
-  );
 }

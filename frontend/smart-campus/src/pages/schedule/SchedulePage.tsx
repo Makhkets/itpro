@@ -2,9 +2,9 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
-import { Calendar, Map, Search } from "lucide-react";
+import { Calendar, Map, Search, Zap } from "lucide-react";
 import { motion } from "framer-motion";
-import { scheduleApi } from "@/shared/api/modules";
+import { scheduleApi, brsApi } from "@/shared/api/modules";
 import { useAuth } from "@/features/auth/store";
 import { PageHeader } from "@/shared/ui/page-header";
 import { Tabs } from "@/shared/ui/tabs";
@@ -22,6 +22,24 @@ type SearchMode = "group" | "teacher";
 
 export default function SchedulePage() {
   const { user } = useAuth();
+
+  // Fetch BRS profile to get groupName if not in auth store
+  const { data: brsProfile } = useQuery({
+    queryKey: ["brs-profile-group"],
+    queryFn: () => brsApi.profile(),
+    enabled: !user?.groupName,
+    retry: false,
+  });
+
+  const groupName = useMemo(() => {
+    if (user?.groupName) return user.groupName;
+    if (brsProfile && typeof brsProfile === "object") {
+      const p = brsProfile as Record<string, unknown>;
+      return (p.group_name ?? p.groupName ?? p.group ?? "") as string;
+    }
+    return "";
+  }, [user?.groupName, brsProfile]);
+
   const [view, setView] = useState<"today" | "week">("today");
   const [scheduleType, setScheduleType] = useState<ScheduleType>("classes");
   const [searchMode, setSearchMode] = useState<SearchMode>("group");
@@ -106,6 +124,38 @@ export default function SchedulePage() {
           onChange={(k) => setSearchMode(k as SearchMode)}
         />
       </div>
+
+      {groupName && (
+        <motion.button
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => {
+            form.setValue("query", groupName);
+            setQuery(groupName);
+            setSearchMode("group");
+          }}
+          className={cn(
+            "w-full flex items-center gap-3 p-4 rounded-2xl border text-left transition-all",
+            query === groupName
+              ? "bg-burgundy/5 border-burgundy/30 shadow-sm"
+              : "bg-white border-border/60 hover:border-burgundy/30 hover:shadow-sm",
+          )}
+        >
+          <div className={cn(
+            "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
+            query === groupName ? "bg-burgundy text-white" : "bg-burgundy-light text-burgundy",
+          )}>
+            <Zap className="h-4.5 w-4.5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-navy">Моё расписание</div>
+            <div className="text-xs text-muted truncate">Группа {groupName}</div>
+          </div>
+          {query === groupName && (
+            <Badge variant="burgundy">активно</Badge>
+          )}
+        </motion.button>
+      )}
 
       <Card className="p-4 md:p-5">
         <form

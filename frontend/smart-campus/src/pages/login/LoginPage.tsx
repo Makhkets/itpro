@@ -30,15 +30,25 @@ type ISUFormData = z.infer<typeof isuSchema>;
 
 type LoginTab = "email" | "isu";
 
+const ISU_REMEMBER_KEY = "sc.isu_remember";
+const ISU_USERNAME_KEY = "sc.isu_username";
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { setAuth } = useAuth();
   const [showPass, setShowPass] = useState(false);
   const [tab, setTab] = useState<LoginTab>("email");
+  const [rememberIsu, setRememberIsu] = useState(() => localStorage.getItem(ISU_REMEMBER_KEY) === "1");
 
   const emailForm = useForm<EmailFormData>({ resolver: zodResolver(emailSchema) });
-  const isuForm = useForm<ISUFormData>({ resolver: zodResolver(isuSchema) });
+  const isuForm = useForm<ISUFormData>({
+    resolver: zodResolver(isuSchema),
+    defaultValues: {
+      username: rememberIsu ? (localStorage.getItem(ISU_USERNAME_KEY) ?? "") : "",
+      password: "",
+    },
+  });
 
   const redirectTo =
     (location.state as { from?: { pathname?: string } } | null)?.from
@@ -48,6 +58,17 @@ export default function LoginPage() {
     setAuth(data.user, data.token);
     toast.success(`Добро пожаловать, ${data.user.fullName.split(" ")[1] ?? data.user.fullName}`);
     navigate(redirectTo, { replace: true });
+  };
+
+  const handleIsuSubmit = (d: ISUFormData) => {
+    if (rememberIsu) {
+      localStorage.setItem(ISU_REMEMBER_KEY, "1");
+      localStorage.setItem(ISU_USERNAME_KEY, d.username);
+    } else {
+      localStorage.removeItem(ISU_REMEMBER_KEY);
+      localStorage.removeItem(ISU_USERNAME_KEY);
+    }
+    isuLogin.mutate(d);
   };
 
   const login = useMutation({
@@ -214,7 +235,7 @@ export default function LoginPage() {
 
           {tab === "isu" && (
             <form
-              onSubmit={isuForm.handleSubmit((d) => isuLogin.mutate(d))}
+              onSubmit={isuForm.handleSubmit(handleIsuSubmit)}
               className="space-y-4"
               noValidate
             >
@@ -228,7 +249,7 @@ export default function LoginPage() {
                 <Label required>Логин ИСУ</Label>
                 <Input
                   type="text"
-                  placeholder="25400609"
+                  placeholder="Логин ИСУ"
                   leftIcon={<UserIcon className="h-4 w-4" />}
                   invalid={!!isuForm.formState.errors.username}
                   {...isuForm.register("username")}
@@ -255,6 +276,16 @@ export default function LoginPage() {
                 />
                 <FieldError message={isuForm.formState.errors.password?.message} />
               </div>
+
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberIsu}
+                  onChange={(e) => setRememberIsu(e.target.checked)}
+                  className="h-4 w-4 rounded border-border text-burgundy focus:ring-burgundy/30 accent-burgundy"
+                />
+                <span className="text-sm text-muted">Запомнить меня</span>
+              </label>
 
               <Button
                 type="submit"

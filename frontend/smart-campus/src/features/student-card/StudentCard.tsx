@@ -4,6 +4,12 @@ import { X } from "lucide-react";
 import type { User } from "@/shared/api/types";
 import { ROLE_LABEL } from "@/shared/lib/role";
 
+function abbrev(name: string): string {
+  const words = name.split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return name;
+  return words.map((w) => w[0].toUpperCase()).join("");
+}
+
 interface StudentCardProps {
   user: User;
   open: boolean;
@@ -196,7 +202,7 @@ export function StudentCard({ user, open, onClose }: StudentCardProps) {
 
                 {/* Info block */}
                 <div className="relative space-y-2">
-                  <InfoLine label="Факультет" value={user.department ?? "—"} />
+                  <InfoLine label="Факультет" value={user.department ? abbrev(user.department) : "—"} />
                   <InfoLine label="Группа" value={user.groupName ?? "—"} />
                   <InfoLine label="Email" value={user.email} />
                 </div>

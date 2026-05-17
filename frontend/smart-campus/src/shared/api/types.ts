@@ -461,10 +461,16 @@ export interface ISULoginRequest {
   password: string;
 }
 
+export interface BRSTeacher {
+  name: string;
+  role: "lecture" | "practice" | "lab";
+}
+
 export interface BRSGrade {
   disciplineId: number;
   disciplineName: string;
   teacherName: string;
+  teachers?: BRSTeacher[];
   att1Current: number;
   att1Border: number;
   att2Current: number;

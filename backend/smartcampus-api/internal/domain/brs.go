@@ -1,10 +1,17 @@
 package domain
 
+// BRSTeacher represents a teacher assigned to a specific role in a discipline.
+type BRSTeacher struct {
+	Name string `json:"name"`
+	Role string `json:"role"` // "lecture", "practice", "lab"
+}
+
 // BRSGrade represents a single grade entry from ISU BRS system.
 type BRSGrade struct {
-	DisciplineID    int     `json:"disciplineId"`
-	DisciplineName  string  `json:"disciplineName"`
-	TeacherName     string  `json:"teacherName"`
+	DisciplineID    int          `json:"disciplineId"`
+	DisciplineName  string       `json:"disciplineName"`
+	TeacherName     string       `json:"teacherName"`
+	Teachers        []BRSTeacher `json:"teachers"`
 	Att1Current     float64 `json:"att1Current"`
 	Att1Border      float64 `json:"att1Border"`
 	Att2Current     float64 `json:"att2Current"`

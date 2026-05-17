@@ -187,6 +187,18 @@ func (s *Service) LoginISU(ctx context.Context, username, password string, meta 
 	isuToken := loginResult.Token
 	profile := loginResult.Profile
 
+	// Enrich profile: if GroupName is empty, try fetching from ISU profile endpoint
+	if profile.GroupName == "" || profile.Institute == "" {
+		if fetched, err := s.isuAuth.FetchProfile(ctx, isuToken); err == nil {
+			if profile.GroupName == "" && fetched.GroupName != "" {
+				profile.GroupName = fetched.GroupName
+			}
+			if profile.Institute == "" && fetched.Institute != "" {
+				profile.Institute = fetched.Institute
+			}
+		}
+	}
+
 	// Build user data
 	fullName := profile.FullName
 	if fullName == "" {

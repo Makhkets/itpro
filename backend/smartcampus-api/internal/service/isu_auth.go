@@ -78,11 +78,12 @@ func (c *ISUAuthClient) Login(ctx context.Context, username, password string) (I
 
 // isuTokenResponse matches the JSON from POST /api/token/.
 type isuTokenResponse struct {
-	Token    string   `json:"token"`
-	UserID   int      `json:"user_id"`
-	FullName string   `json:"full_name"`
-	Roles    []string `json:"role"`
-	Dep      *string  `json:"dep"`
+	Token     string   `json:"token"`
+	UserID    int      `json:"user_id"`
+	FullName  string   `json:"full_name"`
+	Roles     []string `json:"role"`
+	Dep       *string  `json:"dep"`
+	GroupName *string  `json:"group_name"`
 }
 
 func (c *ISUAuthClient) tryLogin(ctx context.Context, url string, body []byte) (ISULoginResult, error) {
@@ -126,6 +127,9 @@ func (c *ISUAuthClient) tryLogin(ctx context.Context, url string, body []byte) (
 	}
 	if tokenResp.Dep != nil {
 		profile.Institute = *tokenResp.Dep
+	}
+	if tokenResp.GroupName != nil {
+		profile.GroupName = *tokenResp.GroupName
 	}
 
 	return ISULoginResult{Token: tokenResp.Token, Profile: profile}, nil
@@ -264,6 +268,7 @@ func (c *ISUAuthClient) FetchGrades(ctx context.Context, isuToken string, yearSt
 			DisciplineID:    d.ID,
 			DisciplineName:  d.Name,
 			TeacherName:     isuTeacherNames(d),
+			Teachers:        isuBuildTeachers(d),
 			Att1Current:     g.Tek1,
 			Att1Border:      g.Rub1,
 			Att2Current:     g.Tek2,
@@ -294,6 +299,25 @@ func isuTeacherNames(d isuDiscipline) string {
 		}
 	}
 	return strings.Join(names, ", ")
+}
+
+// isuBuildTeachers builds a structured list of teachers with their roles.
+func isuBuildTeachers(d isuDiscipline) []domain.BRSTeacher {
+	var teachers []domain.BRSTeacher
+	type pair struct {
+		t    isuTeacher
+		role string
+	}
+	for _, p := range []pair{
+		{d.LectureTeacher, "lecture"},
+		{d.PracticeTeacher, "practice"},
+		{d.LabTeacher, "lab"},
+	} {
+		if p.t.Name != "" {
+			teachers = append(teachers, domain.BRSTeacher{Name: p.t.Name, Role: p.role})
+		}
+	}
+	return teachers
 }
 
 // FetchDisciplineJournal fetches per-lesson attendance data for a discipline.

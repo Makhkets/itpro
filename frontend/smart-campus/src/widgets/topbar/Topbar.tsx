@@ -50,13 +50,13 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
           if (query.trim()) navigate(`/rooms?q=${encodeURIComponent(query)}`);
         }}
       >
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
+        <Search className="absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           type="search"
-          placeholder="Найти аудиторию, преподавателя, книгу…"
-          className="w-full h-10 pl-10 pr-4 rounded-xl bg-surface-subtle border border-transparent text-sm placeholder:text-navy-50 focus:bg-white focus:border-border focus:shadow-glow focus:outline-none transition-all"
+          placeholder="Поиск…"
+          className="w-full h-9 sm:h-10 pl-9 sm:pl-10 pr-3 sm:pr-4 rounded-xl bg-surface-subtle border border-transparent text-sm placeholder:text-navy-50 focus:bg-white focus:border-border focus:shadow-glow focus:outline-none transition-all"
         />
       </form>
 

@@ -20,6 +20,7 @@ import {
   Sparkles,
   GraduationCap,
   Landmark,
+  Trophy,
 } from "lucide-react";
 import type { Role } from "@/shared/api/types";
 
@@ -62,6 +63,7 @@ export function getNavigation(role: Role): NavGroup[] {
         items: [
           { to: "/brs", label: "БРС", icon: GraduationCap },
           { to: "/analytics", label: "Аналитика учёбы", icon: BarChart3 },
+          { to: "/leaderboard", label: "Рейтинг", icon: Trophy },
         ],
       },
       {
