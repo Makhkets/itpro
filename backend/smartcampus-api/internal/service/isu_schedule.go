@@ -97,7 +97,7 @@ func periodToPair(period int) int {
 }
 
 // computeOccurrences expands an ISU entry into concrete date-times within [from, to].
-// week: 1 (odd), 2 (even) or nil (every week). week_day: 1=Mon ... 5=Fri.
+// week: 1 (first academic week), 2 (second academic week) or nil (every week). week_day: 1=Mon ... 5=Fri.
 // Some ISU records are bound to an exact date; for those, date is authoritative.
 func computeOccurrences(e ISUEntry, from, to time.Time, loc *time.Location) []time.Time {
 	startPair := periodToPair(e.Period)
@@ -142,15 +142,42 @@ func computeOccurrences(e ISUEntry, from, to time.Time, loc *time.Location) []ti
 }
 
 func matchesWeekParity(day time.Time, week int) bool {
-	// ISO week: odd weeks -> week==1, even -> week==2. Adjust if ISU uses different convention.
-	_, isoWeek := day.ISOWeek()
+	weekNo := academicWeekNumber(day)
 	if week == 1 {
-		return isoWeek%2 == 1
+		return weekNo%2 == 1
 	}
 	if week == 2 {
-		return isoWeek%2 == 0
+		return weekNo%2 == 0
 	}
 	return true
+}
+
+func academicWeekNumber(day time.Time) int {
+	loc := day.Location()
+	academicYear := day.Year()
+	if day.Month() < time.September {
+		academicYear--
+	}
+	start := academicYearStart(academicYear, loc)
+	current := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, loc)
+	days := int(current.Sub(start).Hours() / 24)
+	if days < 0 {
+		return 1
+	}
+	return days/7 + 1
+}
+
+func academicYearStart(year int, loc *time.Location) time.Time {
+	sep1 := time.Date(year, time.September, 1, 0, 0, 0, 0, loc)
+	return sep1.AddDate(0, 0, -daysSinceMonday(sep1))
+}
+
+func daysSinceMonday(day time.Time) int {
+	wd := int(day.Weekday())
+	if wd == 0 {
+		wd = 7
+	}
+	return wd - 1
 }
 
 func parseISUDate(raw *string, loc *time.Location) (time.Time, bool) {

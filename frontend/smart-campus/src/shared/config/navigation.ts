@@ -21,6 +21,10 @@ import {
   GraduationCap,
   Landmark,
   Trophy,
+  FileSignature,
+  FileText,
+  Files,
+  GitBranch,
 } from "lucide-react";
 import type { Role } from "@/shared/api/types";
 
@@ -37,6 +41,22 @@ export interface NavGroup {
   items: NavItem[];
 }
 
+function edmsGroup(role: Role): NavGroup {
+  const base: NavItem[] = [
+    { to: "/edms", label: "Рабочий стол", icon: FileSignature, end: true },
+    { to: "/edms/inbox", label: "Входящие", icon: Inbox },
+    { to: "/edms/outbox", label: "Мои документы", icon: Files },
+    { to: "/edms/templates", label: "Шаблоны", icon: Sparkles },
+  ];
+  if (role === "admin") {
+    base.push({ to: "/edms/registry", label: "Реестр", icon: FileText });
+    base.push({ to: "/edms/routes", label: "Маршруты", icon: GitBranch });
+  } else {
+    base.push({ to: "/edms/registry", label: "Реестр", icon: FileText });
+  }
+  return { title: "Документооборот", items: base };
+}
+
 export function getNavigation(role: Role): NavGroup[] {
   const scheduleTo =
     role === "teacher" ? "/teacher/schedule" : "/schedule";
@@ -45,6 +65,7 @@ export function getNavigation(role: Role): NavGroup[] {
     items: [
       { to: "/dashboard", label: "Дашборд", icon: LayoutDashboard, end: true },
       { to: scheduleTo, label: "Расписание", icon: Calendar },
+      { to: "/campus-map", label: "Карта кампуса", icon: Map },
       { to: "/ai", label: "AI-ассистент", icon: Bot },
       { to: "/library", label: "Библиотека", icon: Library },
       { to: "/institutes", label: "Институты", icon: Landmark },
@@ -58,6 +79,7 @@ export function getNavigation(role: Role): NavGroup[] {
   if (role === "student") {
     return [
       common,
+      edmsGroup(role),
       {
         title: "Учёба",
         items: [
@@ -79,6 +101,7 @@ export function getNavigation(role: Role): NavGroup[] {
   if (role === "teacher") {
     return [
       common,
+      edmsGroup(role),
       {
         title: "Преподавание",
         items: [
@@ -99,6 +122,7 @@ export function getNavigation(role: Role): NavGroup[] {
   if (role === "applicant") {
     return [
       common,
+      edmsGroup(role),
       {
         title: "Поступление",
         items: [
@@ -126,6 +150,7 @@ export function getNavigation(role: Role): NavGroup[] {
   // admin
   return [
     common,
+    edmsGroup(role),
     {
       title: "Управление",
       items: [

@@ -21,6 +21,7 @@ const RoomsPage = lazy(() => import("@/pages/rooms/RoomsPage"));
 const RoomDetailsPage = lazy(() => import("@/pages/rooms/RoomDetailsPage"));
 const RoomAvailabilityPage = lazy(() => import("@/pages/rooms/RoomAvailabilityPage"));
 const NavigationPage = lazy(() => import("@/pages/navigation/NavigationPage"));
+const CampusMapPage = lazy(() => import("@/pages/campus-map/CampusMapPage"));
 const MyBookingsPage = lazy(() => import("@/pages/bookings/MyBookingsPage"));
 const CreateBookingPage = lazy(() => import("@/pages/bookings/CreateBookingPage"));
 const BRSPage = lazy(() => import("@/pages/brs/BRSPage"));
@@ -55,6 +56,15 @@ const AdminAnalyticsPage = lazy(() => import("@/pages/admin/AdminAnalyticsPage")
 const AdminFaqPage = lazy(() => import("@/pages/admin/AdminFaqPage"));
 const AdminAuditLogsPage = lazy(() => import("@/pages/admin/AdminAuditLogsPage"));
 const AdminSecurityPage = lazy(() => import("@/pages/admin/AdminSecurityPage"));
+
+const EDMSHomePage = lazy(() => import("@/pages/edms/EDMSHomePage"));
+const EDMSInboxPage = lazy(() => import("@/pages/edms/EDMSInboxPage"));
+const EDMSOutboxPage = lazy(() => import("@/pages/edms/EDMSOutboxPage"));
+const EDMSRegistryPage = lazy(() => import("@/pages/edms/EDMSRegistryPage"));
+const EDMSTemplatesPage = lazy(() => import("@/pages/edms/EDMSTemplatesPage"));
+const EDMSRoutesPage = lazy(() => import("@/pages/edms/EDMSRoutesPage"));
+const EDMSNewDocumentPage = lazy(() => import("@/pages/edms/EDMSNewDocumentPage"));
+const EDMSDocumentPage = lazy(() => import("@/pages/edms/EDMSDocumentPage"));
 
 function Loading() {
   return (
@@ -112,6 +122,7 @@ export default function App() {
           <Route path="/rooms/:id" element={<RoomDetailsPage />} />
           <Route path="/rooms/:id/availability" element={<RoomAvailabilityPage />} />
           <Route path="/navigation/room/:roomId" element={<NavigationPage />} />
+          <Route path="/campus-map" element={<CampusMapPage />} />
           <Route path="/bookings/my" element={<MyBookingsPage />} />
           <Route path="/bookings/create" element={<CreateBookingPage />} />
           <Route path="/attendance/my" element={<AttendanceMyPage />} />
@@ -155,6 +166,72 @@ export default function App() {
             element={
               <RoleGuard roles={["librarian", "admin"]}>
                 <LibraryAnalyticsPage />
+              </RoleGuard>
+            }
+          />
+
+          {/* ЭДО — доступен студенту, преподавателю, абитуриенту, админу */}
+          <Route
+            path="/edms"
+            element={
+              <RoleGuard roles={["student", "teacher", "applicant", "admin"]}>
+                <EDMSHomePage />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/edms/inbox"
+            element={
+              <RoleGuard roles={["student", "teacher", "applicant", "admin"]}>
+                <EDMSInboxPage />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/edms/outbox"
+            element={
+              <RoleGuard roles={["student", "teacher", "applicant", "admin"]}>
+                <EDMSOutboxPage />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/edms/registry"
+            element={
+              <RoleGuard roles={["student", "teacher", "applicant", "admin"]}>
+                <EDMSRegistryPage />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/edms/templates"
+            element={
+              <RoleGuard roles={["student", "teacher", "applicant", "admin"]}>
+                <EDMSTemplatesPage />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/edms/routes"
+            element={
+              <RoleGuard roles={["admin"]}>
+                <EDMSRoutesPage />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/edms/new"
+            element={
+              <RoleGuard roles={["student", "teacher", "applicant", "admin"]}>
+                <EDMSNewDocumentPage />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/edms/documents/:id"
+            element={
+              <RoleGuard roles={["student", "teacher", "applicant", "admin"]}>
+                <EDMSDocumentPage />
               </RoleGuard>
             }
           />

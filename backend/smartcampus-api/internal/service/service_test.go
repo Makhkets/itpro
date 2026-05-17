@@ -77,6 +77,43 @@ func TestComputeEndUsesPairDuration(t *testing.T) {
 	}
 }
 
+func TestMatchesWeekParityUsesAcademicYear(t *testing.T) {
+	loc := time.UTC
+
+	firstWeek := time.Date(2025, 9, 1, 12, 0, 0, 0, loc)
+	if !matchesWeekParity(firstWeek, 1) || matchesWeekParity(firstWeek, 2) {
+		t.Fatalf("2025-09-01 must be the first academic week")
+	}
+
+	secondWeek := time.Date(2025, 9, 8, 12, 0, 0, 0, loc)
+	if !matchesWeekParity(secondWeek, 2) || matchesWeekParity(secondWeek, 1) {
+		t.Fatalf("2025-09-08 must be the second academic week")
+	}
+
+	mayWeek := time.Date(2026, 5, 18, 12, 0, 0, 0, loc)
+	if !matchesWeekParity(mayWeek, 2) || matchesWeekParity(mayWeek, 1) {
+		t.Fatalf("2026-05-18 must stay on the academic second week, not ISO parity")
+	}
+}
+
+func TestComputeOccurrencesFiltersByAcademicWeek(t *testing.T) {
+	loc := time.UTC
+	from := time.Date(2026, 5, 18, 0, 0, 0, 0, loc)
+	to := time.Date(2026, 5, 25, 23, 59, 59, 0, loc)
+	weekOne := 1
+	weekTwo := 2
+
+	gotWeekOne := computeOccurrences(ISUEntry{Week: &weekOne, WeekDay: 1, Period: 1}, from, to, loc)
+	if len(gotWeekOne) != 1 || !gotWeekOne[0].Equal(time.Date(2026, 5, 25, 8, 30, 0, 0, loc)) {
+		t.Fatalf("unexpected first-week occurrences: %+v", gotWeekOne)
+	}
+
+	gotWeekTwo := computeOccurrences(ISUEntry{Week: &weekTwo, WeekDay: 1, Period: 1}, from, to, loc)
+	if len(gotWeekTwo) != 1 || !gotWeekTwo[0].Equal(time.Date(2026, 5, 18, 8, 30, 0, 0, loc)) {
+		t.Fatalf("unexpected second-week occurrences: %+v", gotWeekTwo)
+	}
+}
+
 func TestTeacherUsesActivityType(t *testing.T) {
 	labID := int64(3)
 	entry := ISUEntry{
