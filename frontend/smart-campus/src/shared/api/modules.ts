@@ -98,6 +98,8 @@ export const roomsApi = {
     get<RoomAvailability>(`/rooms/${id}/availability`, { date }),
   schedule: (id: string, params?: Record<string, unknown>) =>
     get<Schedule[]>(`/rooms/${id}/schedule`, params),
+  syncIsu: (groups?: string[]) =>
+    post<unknown>("/rooms/sync-isu", { groups: groups ?? [] }),
 };
 
 // ---------- Navigation ----------

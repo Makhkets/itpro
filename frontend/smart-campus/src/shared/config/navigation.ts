@@ -25,6 +25,8 @@ import {
   FileText,
   Files,
   GitBranch,
+  Bike,
+  HeartPulse,
 } from "lucide-react";
 import type { Role } from "@/shared/api/types";
 
@@ -93,6 +95,14 @@ export function getNavigation(role: Role): NavGroup[] {
         items: [
           { to: "/rooms", label: "Аудитории", icon: DoorOpen },
           { to: "/bookings/my", label: "Мои бронирования", icon: BookOpenCheck },
+          { to: "/scooters", label: "Самокаты", icon: Bike },
+        ],
+      },
+      {
+        title: "Сервисы",
+        items: [
+          { to: "/clinic", label: "Поликлиника", icon: HeartPulse },
+          { to: "/attendance/my", label: "Посещаемость", icon: ClipboardCheck },
         ],
       },
     ];
@@ -114,6 +124,13 @@ export function getNavigation(role: Role): NavGroup[] {
         items: [
           { to: "/rooms", label: "Аудитории", icon: DoorOpen },
           { to: "/bookings/my", label: "Бронирования", icon: BookOpenCheck },
+          { to: "/scooters", label: "Самокаты", icon: Bike },
+        ],
+      },
+      {
+        title: "Сервисы",
+        items: [
+          { to: "/clinic", label: "Поликлиника", icon: HeartPulse },
         ],
       },
     ];

@@ -58,6 +58,7 @@ func (h *Handler) RegisterRoutes(api *gin.RouterGroup, redisClient *redis.Client
 	protected.GET("/rooms/:id", h.GetRoom)
 	protected.POST("/rooms", middleware.RequireRole("admin"), h.CreateRoom)
 	protected.PATCH("/rooms/:id", middleware.RequireRole("admin"), h.UpdateRoom)
+	protected.POST("/rooms/sync-isu", middleware.RequireRole("admin"), h.SyncRoomsFromISU)
 	protected.GET("/navigation/room/:roomId", h.RoomNavigation)
 	protected.GET("/navigation/routes", h.GetRoutes)
 	protected.POST("/navigation/routes", middleware.RequireRole("admin"), h.CreateRoute)
@@ -351,6 +352,15 @@ func (h *Handler) UpdateRoom(c *gin.Context) {
 	}
 	item, err := h.svc.UpdateRoom(c.Request.Context(), c.Param("id"), req, meta(c))
 	write(c, item, err)
+}
+
+func (h *Handler) SyncRoomsFromISU(c *gin.Context) {
+	var req struct {
+		Groups []string `json:"groups"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	result, err := h.svc.SyncRoomsFromISU(c.Request.Context(), req.Groups)
+	write(c, result, err)
 }
 
 func (h *Handler) RoomNavigation(c *gin.Context) {

@@ -87,25 +87,50 @@ interface WeatherData {
   weatherCode: number;
 }
 
+/** Map WWO weather codes (wttr.in) → WMO codes (used by our icon/label functions) */
+function wwoToWmo(code: number): number {
+  if (code === 113) return 0;                         // Clear
+  if (code === 116) return 2;                         // Partly cloudy
+  if (code === 119 || code === 122) return 3;         // Cloudy / Overcast
+  if (code === 143 || code === 248 || code === 260) return 45; // Fog / Mist
+  if (code === 176 || code === 263 || code === 266) return 51; // Drizzle
+  if (code === 281 || code === 284) return 56;        // Freezing drizzle
+  if (code === 293 || code === 296) return 61;        // Light rain
+  if (code === 299 || code === 302) return 63;        // Moderate rain
+  if (code === 305 || code === 308) return 65;        // Heavy rain
+  if (code === 311 || code === 314) return 66;        // Freezing rain
+  if (code === 317 || code === 320) return 71;        // Sleet
+  if (code === 323 || code === 326) return 71;        // Light snow
+  if (code === 329 || code === 332) return 73;        // Moderate snow
+  if (code === 335 || code === 338) return 75;        // Heavy snow
+  if (code === 350) return 77;                        // Ice pellets
+  if (code === 353) return 80;                        // Light rain shower
+  if (code === 356 || code === 359) return 82;        // Heavy rain shower
+  if (code >= 362 && code <= 371) return 85;          // Sleet/snow showers
+  if (code >= 386) return 95;                         // Thunderstorm
+  if (code === 200) return 95;                        // Thunderstorm
+  return 3;
+}
+
 function useWeather() {
   return useQuery<WeatherData>({
     queryKey: ["weather", "grozny"],
     queryFn: async () => {
-      const res = await fetch(
-        "https://api.open-meteo.com/v1/forecast?latitude=43.3169&longitude=45.6981&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&timezone=Europe%2FMoscow"
-      );
+      // wttr.in uses real weather station data — more accurate for current conditions
+      const res = await fetch("https://wttr.in/Grozny?format=j1");
       const json = await res.json();
-      const c = json.current;
+      const c = json.current_condition?.[0];
+      if (!c) throw new Error("No weather data");
       return {
-        temp: Math.round(c.temperature_2m),
-        feelsLike: Math.round(c.apparent_temperature),
-        humidity: c.relative_humidity_2m,
-        windSpeed: Math.round(c.wind_speed_10m),
-        weatherCode: c.weather_code,
+        temp: Math.round(Number(c.temp_C)),
+        feelsLike: Math.round(Number(c.FeelsLikeC)),
+        humidity: Number(c.humidity),
+        windSpeed: Math.round(Number(c.windspeedKmph)),
+        weatherCode: wwoToWmo(Number(c.weatherCode)),
       };
     },
-    staleTime: 15 * 60_000,
-    refetchInterval: 15 * 60_000,
+    staleTime: 10 * 60_000,
+    refetchInterval: 10 * 60_000,
   });
 }
 

@@ -33,6 +33,8 @@ const LeaderboardPage = lazy(() => import("@/pages/leaderboard/LeaderboardPage")
 const LibraryPage = lazy(() => import("@/pages/library/LibraryPage"));
 const LibraryBookPage = lazy(() => import("@/pages/library/LibraryBookPage"));
 const LibraryLoansMyPage = lazy(() => import("@/pages/library/LibraryLoansMyPage"));
+const ScooterRentalPage = lazy(() => import("@/pages/scooters/ScooterRentalPage"));
+const ClinicBookingPage = lazy(() => import("@/pages/clinic/ClinicBookingPage"));
 
 const TeacherSchedulePage = lazy(() => import("@/pages/teacher/TeacherSchedulePage"));
 const AttendanceSessionsPage = lazy(() => import("@/pages/teacher/AttendanceSessionsPage"));
@@ -125,6 +127,8 @@ export default function App() {
           <Route path="/campus-map" element={<CampusMapPage />} />
           <Route path="/bookings/my" element={<MyBookingsPage />} />
           <Route path="/bookings/create" element={<CreateBookingPage />} />
+          <Route path="/scooters" element={<ScooterRentalPage />} />
+          <Route path="/clinic" element={<ClinicBookingPage />} />
           <Route path="/attendance/my" element={<AttendanceMyPage />} />
           <Route path="/attendance/analytics" element={<AttendanceAnalyticsPage />} />
           <Route path="/analytics" element={<AcademicAnalyticsPage />} />
