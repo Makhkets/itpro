@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Умный Кампус — Кейс №7</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Nunito+Sans:wght@600;700;800;900&family=Playfair+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --burgundy:#8B1A2B;--burgundy-bright:#A0192D;--crimson:#C0202E;
+  --navy:#0F1B2D;--navy-deep:#0A1320;--ink:#111827;
+  --white:#FFFFFF;--cream:#FAF6F2;
+  --muted:#6B7280;--muted-d:#9CA3AF;
+  --green:#2F7D5B;--red:#B83A3A;
+  --serif:'Playfair Display',Georgia,serif;
+  --display:'Nunito Sans','Manrope',system-ui,sans-serif;
+  --sans:'Manrope',system-ui,sans-serif;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--navy)}
+body{font-family:var(--sans);color:var(--white);-webkit-font-smoothing:antialiased;user-select:none}
+
+/* ── SLIDES ── */
+.deck{position:fixed;inset:0}
+.slide{position:absolute;inset:0;opacity:0;pointer-events:none;transform:translateY(30px);
+  transition:opacity .5s cubic-bezier(.4,0,.2,1),transform .5s cubic-bezier(.4,0,.2,1);overflow:hidden}
+.slide.active{opacity:1;pointer-events:auto;transform:translateY(0)}
+.slide.exit{opacity:0;transform:translateY(-30px)}
+.slide-dark{background:var(--navy);color:var(--white)}
+.slide-light{background:var(--cream);color:var(--ink)}
+.slide-inner{position:relative;width:100%;height:100%;max-width:1440px;margin:0 auto;
+  padding:64px 96px;display:flex;flex-direction:column;z-index:5}
+
+/* ── CORNERS ── */
+.corner{position:absolute;width:48px;height:48px;pointer-events:none}
+.corner-tl{top:28px;left:28px;border-top:1px solid;border-left:1px solid}
+.corner-tr{top:28px;right:28px;border-top:1px solid;border-right:1px solid}
+.corner-bl{bottom:28px;left:28px;border-bottom:1px solid;border-left:1px solid}
+.corner-br{bottom:28px;right:28px;border-bottom:1px solid;border-right:1px solid}
+.slide-dark .corner{border-color:rgba(192,32,46,.3)}
+.slide-light .corner{border-color:rgba(139,26,43,.15)}
+
+/* ── TYPE ── */
+.eyebrow{font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:.22em;text-transform:uppercase}
+.slide-dark .eyebrow{color:var(--crimson)}
+.slide-light .eyebrow{color:var(--burgundy)}
+.h2{font-family:var(--display);font-size:50px;font-weight:900;line-height:1.08;letter-spacing:0}
+.lead{font-size:20px;font-weight:400;line-height:1.55}
+.slide-dark .lead{color:rgba(255,255,255,.65)}
+.slide-light .lead{color:rgba(17,24,39,.6)}
+
+/* ── PROGRESS BAR ── */
+.progress-bar{position:fixed;top:0;left:0;height:2px;background:var(--crimson);z-index:200;
+  transition:width .5s cubic-bezier(.4,0,.2,1);box-shadow:0 0 12px rgba(192,32,46,.6)}
+
+/* ── SIDE DOTS ── */
+.progress{position:fixed;right:36px;top:50%;transform:translateY(-50%);z-index:100;
+  display:flex;flex-direction:column;gap:12px}
+.progress button{display:flex;align-items:center;gap:10px;background:none;border:0;cursor:pointer;padding:3px}
+.progress .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.22);transition:all .3s}
+.progress .num{font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.1em;
+  color:rgba(255,255,255,.35);opacity:0;transform:translateX(-5px);transition:all .3s}
+.progress button:hover .dot{background:rgba(255,255,255,.55)}
+.progress button:hover .num{opacity:1;transform:translateX(0)}
+.progress button.current .dot{background:var(--crimson);width:26px;border-radius:99px;box-shadow:0 0 12px rgba(192,32,46,.5)}
+.progress button.current .num{opacity:1;transform:translateX(0);color:var(--crimson)}
+body.tl .progress .dot{background:rgba(15,27,45,.18)}
+body.tl .progress button.current .dot{background:var(--burgundy);box-shadow:0 0 12px rgba(139,26,43,.35)}
+body.tl .progress .num{color:rgba(15,27,45,.4)}
+body.tl .progress button.current .num{color:var(--burgundy)}
+
+/* ── DECK MARK ── */
+.deck-mark{position:fixed;left:36px;top:28px;z-index:100;display:flex;align-items:center;gap:10px;
+  font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:700}
+.deck-mark .logo{width:26px;height:26px;border:1.5px solid var(--crimson);display:grid;place-items:center;
+  transform:rotate(45deg);background:rgba(192,32,46,.08)}
+.deck-mark .logo span{transform:rotate(-45deg);font-family:var(--serif);font-size:12px;color:var(--crimson);font-weight:800}
+.deck-mark .lbl{display:flex;flex-direction:column;gap:1px}
+.deck-mark .lbl small{opacity:.45;font-size:8px;letter-spacing:.22em}
+body.tl .deck-mark{color:var(--ink)}
+
+/* ── CASE BADGE ── */
+.case-badge{position:fixed;right:36px;top:28px;z-index:100;padding:6px 14px;
+  border:1px solid var(--crimson);font-size:9px;letter-spacing:.22em;text-transform:uppercase;
+  font-weight:800;color:var(--crimson);background:rgba(192,32,46,.06);backdrop-filter:blur(6px)}
+
+/* ── NAV HINT ── */
+.nav-hint{position:fixed;left:36px;bottom:28px;z-index:100;display:flex;align-items:center;gap:12px;
+  font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;opacity:.45}
+.nav-hint .keys{display:flex;gap:5px}
+.nav-hint .key{width:24px;height:24px;display:grid;place-items:center;border:1px solid currentColor;border-radius:5px;font-size:13px}
+body.tl .nav-hint{color:var(--ink)}
+
+/* ── SLIDE COUNTER ── */
+.slide-counter{position:fixed;right:36px;bottom:28px;z-index:100;font-family:var(--sans);
+  font-size:11px;font-weight:600;letter-spacing:.1em;opacity:.45}
+body.tl .slide-counter{color:var(--ink)}
+
+/* ── UNICORN BG ── */
+.us-bg{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+.us-bg div[data-us-project]{width:100%!important;height:100%!important}
+.us-bg iframe+div,.us-bg a[href*="unicorn"],.us-bg div[style*="z-index: 2147483647"]{display:none!important;opacity:0!important;pointer-events:none!important;visibility:hidden!important}
+
+/* ── PARTICLES ── */
+.particles{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.particle{position:absolute;width:2px;height:2px;background:var(--crimson);border-radius:50%;opacity:0}
+.particle:nth-child(1){left:12%;top:20%;animation:pFloat 8s 0s infinite}
+.particle:nth-child(2){left:28%;top:65%;animation:pFloat 10s 1s infinite;width:3px;height:3px}
+.particle:nth-child(3){left:55%;top:35%;animation:pFloat 12s 2s infinite}
+.particle:nth-child(4){left:72%;top:75%;animation:pFloat 9s 3s infinite;width:3px;height:3px}
+.particle:nth-child(5){left:88%;top:15%;animation:pFloat 11s 4s infinite}
+.particle:nth-child(6){left:42%;top:85%;animation:pFloat 13s 1.5s infinite}
+@keyframes pFloat{0%{opacity:0;transform:translateY(0) scale(1)}15%{opacity:.5}50%{opacity:.3;transform:translateY(-120px) scale(1.5)}85%{opacity:.15}100%{opacity:0;transform:translateY(-240px) scale(.5)}}
+
+/* ── SHIMMER ── */
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.shimmer-border{position:relative}
+.shimmer-border::after{content:'';position:absolute;inset:-1px;z-index:-1;background:linear-gradient(90deg,transparent,rgba(192,32,46,.4),transparent,rgba(192,32,46,.2),transparent);background-size:200% 100%;animation:shimmer 4s linear infinite;opacity:0;transition:opacity .5s}
+.shimmer-border:hover::after{opacity:1}
+
+/* ── GLOW DIVIDER ── */
+.glow-line{width:100%;height:1px;background:linear-gradient(90deg,transparent,var(--crimson),transparent);margin:24px 0;opacity:.4}
+
+/* ── SECURITY BADGE ── */
+.sec-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 18px;background:rgba(192,32,46,.08);border:1px solid rgba(192,32,46,.25);font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--crimson);margin-top:16px}
+.sec-badge svg{flex-shrink:0}
+.slide-light .sec-badge{background:rgba(139,26,43,.06);border-color:rgba(139,26,43,.2);color:var(--burgundy)}
+
+/* ── COMPLIANCE BANNER ── */
+.compliance-bar{display:flex;align-items:center;gap:14px;padding:16px 24px;margin-top:20px;background:linear-gradient(90deg,rgba(192,32,46,.1),rgba(192,32,46,.03));border:1px solid rgba(192,32,46,.2);backdrop-filter:blur(4px)}
+.compliance-bar .shield{flex-shrink:0}
+.compliance-bar .cb-text{font-size:14px;color:rgba(255,255,255,.85);font-weight:500}
+.compliance-bar .cb-text strong{color:var(--crimson);font-weight:700}
+.slide-light .compliance-bar{background:linear-gradient(90deg,rgba(139,26,43,.06),rgba(139,26,43,.02));border-color:rgba(139,26,43,.15)}
+.slide-light .compliance-bar .cb-text{color:var(--ink)}
+.slide-light .compliance-bar .cb-text strong{color:var(--burgundy)}
+
+/* ── REVEAL ── */
+.reveal>*{opacity:0;transform:translateY(20px)}
+
+/* ====== SLIDE 1 — HERO ====== */
+#s1::before{content:'';position:absolute;inset:0;z-index:2;pointer-events:none;
+  background:radial-gradient(circle at 50% 45%,rgba(10,19,32,.18) 0%,rgba(10,19,32,.56) 58%,rgba(10,19,32,.82) 100%),
+    linear-gradient(180deg,rgba(10,19,32,.4),rgba(10,19,32,.18) 44%,rgba(10,19,32,.6))}
+#s1 .slide-inner{justify-content:center;align-items:center;text-align:center}
+#s1 .hero-ey{display:flex;align-items:center;gap:14px;margin-bottom:28px}
+#s1 .hero-ey .ln{width:48px;height:1px;background:var(--crimson)}
+#s1 .hero-ey .eyebrow{color:#FF5264;text-shadow:0 2px 18px rgba(0,0,0,.65)}
+#s1 .title{font-size:clamp(72px,10vw,160px);font-family:var(--display);font-weight:900;line-height:.92;
+  letter-spacing:0;margin-bottom:20px;
+  background:linear-gradient(180deg,#fff 0%,#fff 60%,rgba(255,255,255,.78) 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 10px 32px rgba(0,0,0,.55))}
+#s1 .subline{font-size:23px;font-weight:600;color:rgba(255,255,255,.92);letter-spacing:.02em;max-width:680px;margin-bottom:72px;
+  text-shadow:0 3px 22px rgba(0,0,0,.75)}
+#s1 .stats{display:flex;align-items:center;gap:56px}
+#s1 .stat{display:flex;flex-direction:column;gap:6px;align-items:center}
+#s1 .stat-val{font-family:var(--display);font-size:58px;font-weight:800;line-height:1}
+#s1 .stat-val .plus{color:var(--crimson)}
+#s1 .stat-lbl{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.45);font-weight:500}
+#s1 .stat-div{width:1px;height:56px;background:linear-gradient(180deg,transparent,rgba(255,255,255,.18),transparent)}
+.light-rays{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.ray{position:absolute;width:200%;height:1px;opacity:.25;
+  background:linear-gradient(90deg,transparent,var(--crimson) 40%,transparent)}
+.ray:nth-child(1){top:16%;transform:rotate(7deg);animation:rayM 10s linear infinite}
+.ray:nth-child(2){top:44%;transform:rotate(-5deg);animation:rayM 12s linear infinite 2s;opacity:.15}
+.ray:nth-child(3){top:76%;transform:rotate(3deg);animation:rayM 14s linear infinite 4s;opacity:.2}
+@keyframes rayM{0%{translate:-50% 0}100%{translate:0 0}}
+.orb{position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none}
+.orb-1{width:550px;height:550px;background:rgba(139,26,43,.3);top:-180px;right:-180px;animation:orbF 14s ease-in-out infinite alternate}
+.orb-2{width:450px;height:450px;background:rgba(192,32,46,.15);bottom:-120px;left:-120px;animation:orbF 18s ease-in-out infinite alternate-reverse}
+@keyframes orbF{0%{translate:0 0}100%{translate:50px -30px}}
+.grid-bg{position:absolute;inset:0;background-image:
+  linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:72px 72px;pointer-events:none}
+
+/* ====== SLIDE 2 — TEAM ====== */
+#s2 .team-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:20px}
+#s2 .tc{padding:36px 28px;background:var(--white);border:1px solid rgba(15,27,45,.08);
+  position:relative;transition:all .4s;min-height:320px;display:flex;flex-direction:column;justify-content:space-between}
+#s2 .tc::before{content:'';position:absolute;left:0;top:0;width:3px;height:0;background:var(--burgundy);transition:height .4s}
+#s2 .tc:hover{transform:translateY(-4px);box-shadow:0 24px 48px -16px rgba(15,27,45,.1)}
+#s2 .tc:hover::before{height:100%}
+#s2 .tc-num{font-family:var(--display);font-size:13px;color:var(--burgundy);letter-spacing:.1em;font-weight:800}
+#s2 .tc-role{font-family:var(--display);font-size:25px;font-weight:800;line-height:1.18;color:var(--ink);margin-top:14px}
+#s2 .tc-desc{font-size:13px;color:var(--muted);margin-top:14px;line-height:1.5}
+#s2 .tc-mark{width:40px;height:40px;border:1px solid var(--burgundy);display:grid;place-items:center;
+  transform:rotate(45deg);align-self:center}
+#s2 .tc-mark span{transform:rotate(-45deg);font-family:var(--display);font-size:15px;color:var(--burgundy);font-weight:800}
+#s2 .brief{margin-top:48px;padding-top:28px;border-top:1px solid rgba(15,27,45,.08);
+  display:flex;align-items:center;justify-content:center;gap:14px}
+#s2 .brief .d{width:6px;height:6px;background:var(--burgundy);border-radius:50%}
+#s2 .brief p{font-size:15px;color:var(--muted)}
+
+/* ====== SLIDE 3 — PROBLEM ====== */
+#s3 .content{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:52px;flex:1;align-items:start}
+#s3 .left-col{display:flex;flex-direction:column;gap:14px}
+#s3 .context-box{padding:18px 22px;background:rgba(192,32,46,.06);border-left:3px solid var(--crimson);margin-bottom:2px}
+#s3 .context-box p{font-size:14px;color:rgba(255,255,255,.82);line-height:1.45}
+#s3 .problems{display:flex;flex-direction:column;gap:0}
+#s3 .pi{display:flex;gap:18px;padding:16px 0;border-top:1px solid rgba(255,255,255,.08);align-items:flex-start}
+#s3 .pi:last-child{border-bottom:1px solid rgba(255,255,255,.08)}
+#s3 .pi-n{font-family:var(--display);font-size:19px;color:var(--crimson);min-width:40px;font-weight:800}
+#s3 .pi-t{font-size:15px;color:rgba(255,255,255,.88);line-height:1.4}
+#s3 .right-col{display:flex;flex-direction:column;gap:14px}
+#s3 .impact-note{padding:20px 24px;background:linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.015));border:1px solid rgba(255,255,255,.08)}
+#s3 .impact-note .label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--crimson);font-weight:700;margin-bottom:8px}
+#s3 .impact-note p{font-family:var(--display);font-size:23px;font-weight:800;line-height:1.25;color:rgba(255,255,255,.92)}
+#s3 .impact-note span{color:var(--crimson)}
+#s3 .stakeholder-block{padding:18px 22px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.02);position:relative}
+#s3 .stakeholder-block::before{content:'';position:absolute;top:0;left:24px;right:24px;height:2px;background:var(--crimson);opacity:.6}
+#s3 .sh-head{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+#s3 .sh-icon{width:30px;height:30px;border:1px solid var(--crimson);display:grid;place-items:center;flex-shrink:0}
+#s3 .sh-icon svg{width:16px;height:16px}
+#s3 .sh-name{font-family:var(--display);font-size:20px;font-weight:800;color:var(--white)}
+#s3 .sh-tag{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--crimson);font-weight:700;margin-left:auto}
+#s3 .sh-summary{font-size:12.5px;color:rgba(255,255,255,.76);line-height:1.48}
+#s3 .sh-pain{display:inline-flex;align-items:center;gap:4px;margin-top:10px;padding:5px 10px;background:rgba(192,32,46,.1);font-size:10px;font-weight:700;color:var(--crimson);letter-spacing:.04em;text-transform:uppercase}
+#s3 .constraints{padding:18px 20px;background:linear-gradient(135deg,rgba(139,26,43,.15),rgba(192,32,46,.04));
+  border:1px solid rgba(192,32,46,.22)}
+#s3 .con-title{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--crimson);font-weight:700;margin-bottom:12px}
+#s3 .chips{display:flex;flex-wrap:wrap;gap:8px}
+#s3 .chip{padding:6px 12px;font-size:11px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.8)}
+
+/* ====== SLIDE 4 — ANALYSIS ====== */
+#s4 .compare{display:grid;grid-template-columns:1fr 1fr;gap:24px;flex:1}
+#s4 .col{background:var(--white);border:1px solid rgba(15,27,45,.08);padding:24px 26px;display:flex;flex-direction:column}
+#s4 .col-head{display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;
+  border-bottom:1px solid rgba(15,27,45,.06);margin-bottom:16px}
+#s4 .col-name{font-family:var(--display);font-size:23px;font-weight:800;color:var(--ink)}
+#s4 .col-tag{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--burgundy);
+  font-weight:700;padding:3px 8px;border:1px solid var(--burgundy)}
+#s4 .pcb{margin-bottom:13px}
+#s4 .pc-lbl{font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;margin-bottom:8px}
+#s4 .pros .pc-lbl{color:var(--green)}
+#s4 .cons .pc-lbl{color:var(--red)}
+#s4 .pc{padding:9px 12px;border-left:3px solid;background:#FBFAF8;margin-bottom:4px;font-size:12.5px;line-height:1.35;color:var(--ink)}
+#s4 .pros .pc{border-left-color:var(--green)}
+#s4 .cons .pc{border-left-color:var(--red)}
+#s4 .conclusion{margin-top:14px;padding:14px 24px;
+  background:linear-gradient(90deg,var(--burgundy),var(--burgundy-bright));
+  color:var(--white);display:flex;align-items:center;gap:18px;position:relative;overflow:hidden}
+#s4 .conclusion::before{content:'';position:absolute;top:0;right:0;width:180px;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.08))}
+#s4 .conclusion-m{width:32px;height:32px;border:1px solid rgba(255,255,255,.45);display:grid;
+  place-items:center;flex-shrink:0;transform:rotate(45deg)}
+#s4 .conclusion-m span{transform:rotate(-45deg);font-family:var(--display);font-weight:800;font-size:14px}
+#s4 .conclusion-t{font-family:var(--display);font-size:16px;font-weight:700;line-height:1.4}
+
+/* ====== SLIDE 5 — SOLUTION ====== */
+#s5 .features{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;flex:1}
+#s5 .feat{padding:18px 20px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);
+  position:relative;overflow:hidden;transition:all .4s;display:flex;flex-direction:column;justify-content:space-between}
+#s5 .feat::after{content:'';position:absolute;bottom:0;left:0;height:2px;width:0;background:var(--crimson);transition:width .5s}
+#s5 .feat:hover{background:rgba(192,32,46,.05);border-color:rgba(192,32,46,.25)}
+#s5 .feat:hover::after{width:100%}
+#s5 .feat-n{font-family:var(--display);font-size:12px;color:var(--crimson);letter-spacing:.1em;font-weight:800}
+#s5 .feat-t{font-family:var(--display);font-size:17px;font-weight:800;color:var(--white);line-height:1.22;margin-top:8px}
+#s5 .feat-d{font-size:12px;color:rgba(255,255,255,.5);margin-top:6px;line-height:1.45}
+#s5 .feat-ico{font-size:24px;margin-bottom:8px}
+#s5 .tagline{margin-top:28px;text-align:center;font-family:var(--display);font-size:19px;font-weight:700;color:rgba(255,255,255,.6)}
+#s5 .tagline .em{color:var(--crimson);font-style:normal;font-weight:600}
+
+/* ====== SLIDE 6 — BENEFITS ====== */
+#s6 .audience{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;flex:1}
+#s6 .ac{background:var(--white);border:1px solid rgba(15,27,45,.08);padding:28px 24px;
+  position:relative;display:flex;flex-direction:column;transition:all .4s}
+#s6 .ac:hover{transform:translateY(-4px);border-color:var(--burgundy);box-shadow:0 24px 48px -16px rgba(15,27,45,.12)}
+#s6 .ac-num{font-family:var(--display);font-size:48px;font-weight:800;line-height:1;color:rgba(139,26,43,.1)}
+#s6 .ac-name{font-family:var(--display);font-size:23px;font-weight:800;color:var(--ink);margin-top:2px;line-height:1.15}
+#s6 .ac-div{width:28px;height:1px;background:var(--burgundy);margin:18px 0}
+#s6 .ac-list{list-style:none;display:flex;flex-direction:column;gap:9px}
+#s6 .ac-list li{font-size:13px;color:var(--muted);line-height:1.5;padding-left:14px;position:relative}
+#s6 .ac-list li::before{content:'';position:absolute;left:0;top:9px;width:5px;height:1px;background:var(--burgundy)}
+
+/* ====== SLIDE 7 — ARCHITECTURE ====== */
+#s7 .arch{flex:1;display:flex;flex-direction:column;gap:12px;justify-content:center;padding:0 32px}
+#s7 .layer{padding:22px 28px;border:1px solid rgba(255,255,255,.1);position:relative}
+#s7 .layer-tag{position:absolute;left:28px;top:-9px;background:var(--navy);padding:0 10px;
+  font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--crimson);font-weight:700}
+#s7 .layer-c{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#s7 .node{padding:9px 16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.1);font-size:13px;color:rgba(255,255,255,.82)}
+#s7 .tech-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;width:100%}
+#s7 .tech-card{padding:12px 14px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.1)}
+#s7 .tech-role{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--crimson);font-weight:800;margin-bottom:7px}
+#s7 .tech-stack{font-size:13px;line-height:1.35;color:rgba(255,255,255,.85);font-weight:600}
+#s7 .l2{background:linear-gradient(90deg,rgba(139,26,43,.15),rgba(192,32,46,.04));border-color:rgba(192,32,46,.3)}
+#s7 .l2 .node{background:rgba(192,32,46,.08);border-color:rgba(192,32,46,.25);color:var(--white)}
+#s7 .conn{display:flex;justify-content:center;height:24px;position:relative}
+#s7 .conn::before{content:'';position:absolute;left:50%;width:1px;height:100%;background:rgba(192,32,46,.35)}
+#s7 .conn::after{content:'▼';position:absolute;bottom:-2px;left:50%;transform:translateX(-50%);
+  font-size:8px;color:var(--crimson);opacity:.6}
+#s7 .l3{background:linear-gradient(90deg,rgba(47,125,91,.1),rgba(47,125,91,.03));border-color:rgba(47,125,91,.3)}
+#s7 .l3 .node{background:rgba(47,125,91,.08);border-color:rgba(47,125,91,.25);color:rgba(255,255,255,.9)}
+#s7 .l3 .layer-tag{color:var(--green)}
+
+/* ====== SLIDE 8 — RESOURCES ====== */
+#s8 .res-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;flex:1}
+#s8 .rb{background:var(--white);border:1px solid rgba(15,27,45,.08);padding:36px;display:flex;flex-direction:column;position:relative}
+#s8 .rb::before{content:attr(data-num);position:absolute;right:28px;top:28px;font-family:var(--display);
+  font-size:52px;font-weight:900;color:rgba(139,26,43,.06);line-height:1}
+#s8 .rb-cat{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--burgundy);font-weight:700;margin-bottom:10px}
+#s8 .rb-title{font-family:var(--display);font-size:30px;font-weight:800;color:var(--ink);line-height:1.15;margin-bottom:24px}
+#s8 .rb-list{display:flex;flex-direction:column;gap:12px}
+#s8 .ri{display:flex;align-items:flex-start;gap:12px;font-size:14px;color:var(--ink);
+  padding-bottom:12px;border-bottom:1px solid rgba(15,27,45,.06)}
+#s8 .ri:last-child{border-bottom:0}
+#s8 .ri .mk{width:3px;height:14px;background:var(--burgundy);flex-shrink:0;margin-top:3px}
+#s8 .ri strong{font-weight:600}
+#s8 .ri .meta{font-size:12px;color:var(--muted);margin-left:6px;font-weight:400}
+#s8 .fn{margin-top:20px;padding:16px 24px;border:1px dashed rgba(139,26,43,.25);
+  background:rgba(139,26,43,.025);display:flex;align-items:center;gap:14px}
+#s8 .fn-m{color:var(--burgundy);font-family:var(--display);font-size:22px;font-weight:800}
+#s8 .fn p{font-size:13px;color:var(--ink)}
+
+/* ====== SLIDE 9 — MVP ====== */
+#s9 .mvp-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;flex:1}
+#s9 .mc{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015));
+  border:1px solid rgba(255,255,255,.1);padding:18px 16px;display:flex;flex-direction:column;
+  position:relative;overflow:hidden;transition:all .5s}
+#s9 .mc::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;
+  background:linear-gradient(180deg,var(--crimson),rgba(192,32,46,.2));opacity:.65;transition:opacity .5s}
+#s9 .mc::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(135deg,rgba(255,255,255,.06),transparent 42%);opacity:.45}
+#s9 .mc:hover{transform:translateY(-5px);border-color:rgba(192,32,46,.35);
+  background:linear-gradient(180deg,rgba(192,32,46,.06),rgba(192,32,46,.01))}
+#s9 .mc:hover::before{opacity:1}
+#s9 .mc-ico{font-size:28px;margin-bottom:10px;position:relative;z-index:1}
+#s9 .mc-tag{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--crimson);font-weight:700;margin-bottom:6px}
+#s9 .mc-tag,#s9 .mc-title,#s9 .mc-desc{position:relative;z-index:1}
+#s9 .mc-title{font-family:var(--display);font-size:16px;font-weight:800;color:var(--white);line-height:1.18;margin-bottom:6px}
+#s9 .mc-desc{font-size:11.5px;color:rgba(255,255,255,.58);line-height:1.45;flex:1}
+#s9 .mvp-footer{margin-top:28px;text-align:center;font-family:var(--display);font-size:17px;
+  font-weight:700;color:rgba(255,255,255,.55)}
+#s9 .mvp-footer .em{color:var(--crimson);font-style:normal;font-weight:600}
+
+/* ====== SLIDE 10 — PROSPECTS ====== */
+#s10 .tw{flex:1;display:flex;flex-direction:column;justify-content:center}
+#s10 .timeline{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+#s10 .timeline::before{content:'';position:absolute;left:32px;right:32px;top:31px;height:2px;
+  background:linear-gradient(90deg,var(--burgundy),var(--burgundy-bright),var(--burgundy))}
+#s10 .tn{display:flex;flex-direction:column;align-items:center;text-align:center}
+#s10 .tm{width:60px;height:60px;border-radius:50%;background:var(--cream);border:2px solid var(--burgundy);
+  display:grid;place-items:center;font-family:var(--display);font-size:20px;color:var(--burgundy);
+  font-weight:700;position:relative;z-index:2;transition:all .4s}
+#s10 .tn:hover .tm{background:var(--burgundy);color:var(--white);transform:scale(1.08);
+  box-shadow:0 12px 32px -8px rgba(139,26,43,.4)}
+#s10 .ts{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--burgundy);font-weight:700;margin-top:18px}
+#s10 .tt{font-family:var(--display);font-size:16px;font-weight:800;color:var(--ink);margin-top:6px;line-height:1.25}
+#s10 .td{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.45}
+#s10 .caption{margin-top:48px;text-align:center}
+#s10 .caption p{font-family:var(--display);font-size:19px;font-weight:700;color:var(--ink)}
+#s10 .caption .em{color:var(--burgundy);font-weight:600;font-style:normal}
+
+/* ====== SLIDE 11 — CONCLUSION ====== */
+#s11 .slide-inner{justify-content:center}
+#s11 .cey{display:flex;align-items:center;gap:14px;margin-bottom:22px}
+#s11 .cey .ln{width:40px;height:1px;background:var(--crimson)}
+#s11 .summary{font-size:20px;font-weight:300;color:rgba(255,255,255,.7);max-width:860px;line-height:1.55;margin-bottom:48px}
+#s11 .closing{font-family:var(--display);font-size:clamp(32px,4.8vw,68px);font-weight:900;line-height:1.08;
+  letter-spacing:0;max-width:1080px}
+#s11 .closing .em{background:linear-gradient(135deg,var(--crimson),var(--burgundy-bright));
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+#s11 .thanks{margin-top:72px;padding-top:28px;border-top:1px solid rgba(255,255,255,.1);
+  display:flex;align-items:center;justify-content:space-between}
+#s11 .thanks-t{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:0}
+#s11 .thanks-m{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.35);font-weight:600}
+
+/* ── RESPONSIVE ── */
+@media(max-width:1366px){
+  .slide-inner{padding:52px 68px}
+  .h2{font-size:44px}
+  #s1 .stats{gap:36px}
+  #s1 .stat-val{font-size:48px}
+  #s2 .tc{padding:28px 22px;min-height:260px}
+  #s2 .tc-role{font-size:22px}
+  #s5 .feat{padding:22px}
+  #s5 .feat-t{font-size:18px}
+  #s6 .ac{padding:24px 20px}
+  #s6 .ac-name{font-size:20px}
+  #s9 .mc{padding:24px 20px}
+  #s9 .mc-title{font-size:18px}
+  #s10 .tt{font-size:15px}
+  #s11 .closing{font-size:clamp(28px,4vw,56px)}
+}
+@media(max-width:1024px){
+  .slide-inner{padding:36px 36px}
+  .progress{right:14px}
+  .nav-hint,.deck-mark{left:14px}
+  .case-badge{right:14px}
+  #s2 .team-grid,#s6 .audience,#s9 .mvp-grid{grid-template-columns:repeat(2,1fr)}
+  #s5 .features{grid-template-columns:repeat(2,1fr)}
+  #s3 .content,#s4 .compare,#s8 .res-grid{grid-template-columns:1fr;gap:20px}
+  #s7 .tech-grid{grid-template-columns:repeat(2,1fr)}
+  #s3 .stakeholder-block{padding:18px}
+  #s3 .sh-name{font-size:18px}
+  #s10 .timeline{grid-template-columns:repeat(3,1fr);row-gap:32px}
+}
+</style>
+</head>
+<body>
+
+<!-- FIXED UI -->
+<div class="progress-bar" id="pbar"></div>
+
+<div class="deck-mark">
+  <div class="logo"><span>К</span></div>
+  <div class="lbl"><small>ГГНТУ</small>SMARTCAMPUS</div>
+</div>
+
+<div class="case-badge">Кейс №7</div>
+
+<nav class="progress" id="dots"></nav>
+
+<div class="nav-hint">
+  <div class="keys"><span class="key">↑</span><span class="key">↓</span></div>
+  <span>или scroll</span>
+</div>
+
+<div class="slide-counter" id="scnt">01 / 11</div>
+
+<!-- ════════════════════════════════════════ -->
+<main class="deck">
+
+<!-- ── SLIDE 1 : TITLE ── -->
+<section id="s1" class="slide slide-dark">
+  <div class="us-bg"><div style="width:1440px;height:900px" data-us-project="VEOkyvMxZmvb2NuqOyYR"></div></div>
+  <div class="grid-bg"></div>
+  <div class="corner corner-tl"></div><div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div><div class="corner corner-br"></div>
+  <div class="slide-inner reveal">
+    <div class="hero-ey"><span class="ln"></span><span class="eyebrow">Цифровая экосистема</span><span class="ln"></span></div>
+    <div class="title">Умный Кампус</div>
+    <div class="subline">Единая цифровая экосистема университета</div>
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-val"><span data-count="9">0</span></div>
+        <div class="stat-lbl">Модулей</div>
+      </div>
+      <div class="stat-div"></div>
+      <div class="stat">
+        <div class="stat-val"><span data-count="240">0</span><span class="plus">+</span></div>
+        <div class="stat-lbl">Аудиторий</div>
+      </div>
+      <div class="stat-div"></div>
+      <div class="stat">
+        <div class="stat-val" style="font-size:42px">24/7</div>
+        <div class="stat-lbl">AI-ассистент</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SLIDE 2 : TEAM ── -->
+<section id="s2" class="slide slide-light">
+  <div class="corner corner-tl"></div><div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div><div class="corner corner-br"></div>
+  <div class="slide-inner reveal">
+    <div><span class="eyebrow">Команда проекта</span></div>
+    <div class="h2" style="margin-top:14px">Наша команда</div>
+    <div class="team-grid">
+      <div class="tc">
+        <div><div class="tc-num">01</div><div class="tc-role">Backend-разработчик</div>
+        <div class="tc-desc">API, базы данных, бизнес-логика, интеграции и серверная инфраструктура</div></div>
+        <div class="tc-mark"><span>B</span></div>
+      </div>
+      <div class="tc">
+        <div><div class="tc-num">02</div><div class="tc-role">Frontend-разработчик</div>
+        <div class="tc-desc">UI-компоненты, Telegram-бот, клиентская часть и пользовательские интерфейсы</div></div>
+        <div class="tc-mark"><span>F</span></div>
+      </div>
+      <div class="tc">
+        <div><div class="tc-num">03</div><div class="tc-role">Аналитик<br>и проектировщик дизайна</div>
+        <div class="tc-desc">Исследование проблем, анализ требований, UX/UI дизайн, прототипирование интерфейсов</div></div>
+        <div class="tc-mark"><span>А</span></div>
+      </div>
+    </div>
+    <div class="brief"><div class="d"></div><p>Каждый участник отвечал за отдельное направление проекта</p></div>
+  </div>
+</section>
+
+<!-- ── SLIDE 3 : PROBLEM ── -->
+<section id="s3" class="slide slide-dark">
+  <div class="particles"><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div></div>
+  <div class="corner corner-tl"></div><div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div><div class="corner corner-br"></div>
+  <div class="slide-inner reveal">
+    <div><span class="eyebrow">Проблематика</span></div>
+    <div class="h2" style="margin-top:14px;margin-bottom:14px">Проблема разрозненной среды</div>
+    <div class="content">
+      <div class="left-col">
+        <div class="context-box">
+          <p>Студенты и сотрудники взаимодействуют с <strong style="color:var(--crimson)">несколькими несвязанными системами</strong>, что приводит к потере времени, дублированию данных и снижению эффективности учебного процесса.</p>
+        </div>
+        <div class="problems">
+          <div class="pi"><span class="pi-n">01</span><span class="pi-t">Сложно быстро найти аудиторию или путь между корпусами и университетами — нет единой навигации</span></div>
+          <div class="pi"><span class="pi-n">02</span><span class="pi-t">Расписание хранится в разных источниках и может быть неактуальным</span></div>
+          <div class="pi"><span class="pi-n">03</span><span class="pi-t">Нет удобного способа бронирования помещений</span></div>
+          <div class="pi"><span class="pi-n">04</span><span class="pi-t">За справками и статусами приходится идти в деканат или искать информацию в разных местах</span></div>
+          <div class="pi"><span class="pi-n">05</span><span class="pi-t">Бумажный документооборот — заявления и согласования занимают дни</span></div>
+        </div>
+        <div class="constraints">
+          <div class="con-title">Ограничения</div>
+          <div class="chips">
+            <span class="chip">Старые корпуса</span>
+            <span class="chip">Разные сетевые стандарты</span>
+            <span class="chip">Устаревшие серверы</span>
+            <span class="chip">Ограниченный бюджет</span>
+            <span class="chip" style="border-color:rgba(192,32,46,.35);color:var(--crimson)">152-ФЗ</span>
+          </div>
+        </div>
+      </div>
+      <div class="right-col">
+        <div class="impact-note">
+          <div class="label">Что ломается</div>
+          <p>Ежедневные процессы расходятся по разным каналам: <span>время теряется, данные дублируются, картина успеваемости неясна.</span></p>
+        </div>
+        <div class="stakeholder-block">
+          <div class="sh-head">
+            <div class="sh-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#C0202E" stroke-width="1.5"><circle cx="9" cy="7" r="3"/><path d="M3 21v-2a5 5 0 015-5h2a5 5 0 015 5v2"/><circle cx="17" cy="8" r="2.5"/><path d="M21 21v-1.5a4 4 0 00-3-3.87"/></svg></div>
+            <span class="sh-name">Студенты</span>
+            <span class="sh-tag">10 000+ чел.</span>
+          </div>
+          <div class="sh-summary">Поиск аудитории или маршрута между учебными площадками занимает 5–15 минут; расписание, бронирование и успеваемость не собраны в понятную картину.</div>
+          <div class="sh-pain">Потеря времени · Нет ясности</div>
+        </div>
+        <div class="stakeholder-block">
+          <div class="sh-head">
+            <div class="sh-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#C0202E" stroke-width="1.5"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/></svg></div>
+            <span class="sh-name">Преподаватели</span>
+            <span class="sh-tag">500+ чел.</span>
+          </div>
+          <div class="sh-summary">Ежедневная работа с несколькими системами забирает время на организацию и бронирование аудиторий, а новые процессы воспринимаются как риск усложнения.</div>
+          <div class="sh-pain">Доп. нагрузка · Сложность</div>
+        </div>
+        <div class="stakeholder-block">
+          <div class="sh-head">
+            <div class="sh-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#C0202E" stroke-width="1.5"><path d="M12 2L2 7v10l10 5 10-5V7l-10-5z"/><path d="M2 7l10 5 10-5"/><path d="M12 22V12"/><path d="M7 9.5v5"/><path d="M17 9.5v5"/></svg></div>
+            <span class="sh-name">Администрация</span>
+            <span class="sh-tag">Управление</span>
+          </div>
+          <div class="sh-summary">Устаревшая ИТ-инфраструктура, отсутствие интеграции, бумажный документооборот и меняющиеся требования усложняют контроль процессов.</div>
+          <div class="sh-pain">Высокие затраты · Нет контроля</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SLIDE 4 : ANALYSIS ── -->
+<section id="s4" class="slide slide-light">
+  <div class="corner corner-tl"></div><div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div><div class="corner corner-br"></div>
+  <div class="slide-inner reveal">
+    <div><span class="eyebrow">Исследование</span></div>
+    <div class="h2" style="margin-top:14px;margin-bottom:32px">Анализ существующих решений</div>
+    <div class="compare">
+      <div class="col">
+        <div class="col-head"><span class="col-name">GGNTU APP</span><span class="col-tag">Приложение</span></div>
+        <div class="pcb pros"><div class="pc-lbl">Плюсы</div>
+          <div class="pc">Доступ к информации</div>
+          <div class="pc">Цифровой формат</div>
+          <div class="pc">Удобство для студентов</div>
+        </div>
+        <div class="pcb cons"><div class="pc-lbl">Минусы</div>
+          <div class="pc">Нет полноценной карты кампуса</div>
+          <div class="pc">Нет маршрутов между корпусами</div>
+          <div class="pc">Нет бронирования</div>
+          <div class="pc">Документооборот только в веб-версии</div>
+          <div class="pc">Нет Telegram / AI</div>
+          <div class="pc">Слабые уведомления</div>
+          <div class="pc">Нет аналитики</div>
+          <div class="pc">Нет офлайн-расписания</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="col-head"><span class="col-name">Telegram-чаты</span><span class="col-tag">Мессенджер</span></div>
+        <div class="pcb pros"><div class="pc-lbl">Используются для</div>
+          <div class="pc">Расписание</div>
+          <div class="pc">Объявления</div>
+          <div class="pc">Передача информации</div>
+        </div>
+        <div class="pcb cons"><div class="pc-lbl">Минусы</div>
+          <div class="pc">Дублирование информации</div>
+          <div class="pc">Неактуальность данных</div>
+          <div class="pc">Нет единой системы</div>
+          <div class="pc">Нет Telegram-бота</div>
+        </div>
+      </div>
+    </div>
+    <div class="conclusion">
+      <div class="conclusion-m"><span>!</span></div>
+      <div class="conclusion-t">Существующие решения закрывают только отдельные задачи — единой цифровой экосистемы нет</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SLIDE 5 : SOLUTION ── -->
+<section id="s5" class="slide slide-dark">
+  <div class="particles"><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div></div>
+  <div class="grid-bg"></div>
+  <div class="corner corner-tl"></div><div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div><div class="corner corner-br"></div>
+  <div class="slide-inner reveal">
+    <div><span class="eyebrow">Наше решение</span></div>
+    <div class="h2" style="margin-top:14px;margin-bottom:32px">Умный Кампус</div>
+    <div class="features">
+      <div class="feat shimmer-border">
+        <div><div class="feat-ico">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="2" y="2" width="24" height="24" rx="4" stroke="#C0202E" stroke-width="1.5"/><circle cx="10" cy="12" r="2" fill="#C0202E"/><path d="M4 22l6-8 4 5 4-3 6 6" stroke="#C0202E" stroke-width="1.2"/></svg>
+        </div>
+        <div class="feat-n">01</div><div class="feat-t">Цифровая карта</div></div>
+        <div class="feat-d">Интерактивная карта кампуса с поиском аудиторий и маршрутами</div>
+      </div>
+      <div class="feat shimmer-border">
+        <div><div class="feat-ico">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="3" y="4" width="22" height="20" rx="3" stroke="#C0202E" stroke-width="1.5"/><line x1="3" y1="10" x2="25" y2="10" stroke="#C0202E" stroke-width="1.2"/><line x1="10" y1="10" x2="10" y2="24" stroke="#C0202E" stroke-width="1"/><circle cx="17" cy="17" r="2" fill="#C0202E"/></svg>
+        </div>
+        <div class="feat-n">02</div><div class="feat-t">Единое расписание</div></div>
+        <div class="feat-d">Актуальное расписание групп, преподавателей и аудиторий</div>
+      </div>
+      <div class="feat shimmer-border">
+        <div><div class="feat-ico">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><path d="M14 4v6M14 22v2M7 7l3 3M18 18l3 3M4 14h6M18 14h6M7 21l3-3M18 10l3-3" stroke="#C0202E" stroke-width="1.5" stroke-linecap="round"/><circle cx="14" cy="14" r="4" stroke="#C0202E" stroke-width="1.5"/></svg>
+        </div>
+        <div class="feat-n">03</div><div class="feat-t">Документооборот</div></div>
+        <div class="feat-d">Цифровые заявления, справки и согласования без лишних визитов в деканат</div>
+      </div>
+      <div class="feat shimmer-border">
+        <div><div class="feat-ico">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="5" y="8" width="18" height="14" rx="2" stroke="#C0202E" stroke-width="1.5"/><path d="M9 8V6a5 5 0 0 1 10 0v2" stroke="#C0202E" stroke-width="1.5"/><circle cx="14" cy="16" r="2" fill="#C0202E"/></svg>
+        </div>
+        <div class="feat-n">04</div><div class="feat-t">Бронирование аудиторий</div></div>
+        <div class="feat-d">Онлайн-заявки с проверкой конфликтов и подтверждением</div>
+      </div>
+      <div class="feat shimmer-border">
+        <div><div class="feat-ico">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><path d="M20 4L8 4a4 4 0 0 0-4 4v8l4 4h4l4 4v-4h4a4 4 0 0 0 4-4V8a4 4 0 0 0-4-4z" stroke="#C0202E" stroke-width="1.5"/><circle cx="10" cy="13" r="1.2" fill="#C0202E"/><circle cx="14" cy="13" r="1.2" fill="#C0202E"/><circle cx="18" cy="13" r="1.2" fill="#C0202E"/></svg>
+        </div>
+        <div class="feat-n">05</div><div class="feat-t">Telegram / AI&#8209;ассистент</div></div>
+        <div class="feat-d">Чат-бот с доступом ко всем функциям и AI-ответами</div>
+      </div>
+      <div class="feat shimmer-border">
+        <div><div class="feat-ico">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="3" y="6" width="22" height="18" rx="3" stroke="#C0202E" stroke-width="1.5"/><polyline points="7,20 11,14 15,16 19,10 23,12" fill="none" stroke="#C0202E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="feat-n">06</div><div class="feat-t">БРС и аналитика</div></div>
+        <div class="feat-d">Баллы, журнал посещений, прогресс обучения из ИСУ ГГНТУ в реальном времени</div>
+      </div>
+      <div class="feat shimmer-border">
+        <div><div class="feat-ico">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="18" r="6" stroke="#C0202E" stroke-width="1.5"/><line x1="14" y1="12" x2="14" y2="6" stroke="#C0202E" stroke-width="1.5" stroke-linecap="round"/><line x1="8" y1="6" x2="20" y2="6" stroke="#C0202E" stroke-width="1.5" stroke-linecap="round"/><line x1="10" y1="18" x2="18" y2="18" stroke="#C0202E" stroke-width="1.2"/><circle cx="14" cy="18" r="1.5" fill="#C0202E"/></svg>
+        </div>
+        <div class="feat-n">07</div><div class="feat-t">Аренда самокатов</div></div>
+        <div class="feat-d">Станции на кампусе, баланс, аренда и оплата — быстрое перемещение между корпусами</div>
+      </div>
+      <div class="feat shimmer-border">
+        <div><div class="feat-ico">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><path d="M14 4C8.5 4 4 8.5 4 14s4.5 10 10 10 10-4.5 10-10S19.5 4 14 4z" stroke="#C0202E" stroke-width="1.5"/><path d="M10 14l3 3 5-6" stroke="#C0202E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="feat-n">08</div><div class="feat-t">Запись в поликлинику</div></div>
+        <div class="feat-d">Онлайн-запись к врачам университетской поликлиники с выбором времени</div>
+      </div>
+      <div class="feat shimmer-border">
+        <div><div class="feat-ico">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="4" y="4" width="20" height="20" rx="3" stroke="#C0202E" stroke-width="1.5"/><path d="M8 14h12M14 8v12" stroke="#C0202E" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="10" r="1.5" fill="#C0202E"/><circle cx="18" cy="18" r="1.5" fill="#C0202E"/></svg>
+        </div>
+        <div class="feat-n">09</div><div class="feat-t">Аналитика посещаемости</div></div>
+        <div class="feat-d">Статистика посещений, баллы, допуск к сессии — реальные данные из ИСУ</div>
+      </div>
+    </div>
+    <div class="compliance-bar">
+      <div class="shield"><svg width="24" height="28" viewBox="0 0 24 28" fill="none"><path d="M12 2L2 6v8c0 6.6 4.3 11.2 10 13 5.7-1.8 10-6.4 10-13V6L12 2z" stroke="#C0202E" stroke-width="1.5" fill="rgba(192,32,46,.08)"/><path d="M8 14l3 3 5-6" stroke="#C0202E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="cb-text">Соответствие <strong>152-ФЗ</strong> — защита персональных данных, PII-маскирование, согласие на обработку, право на экспорт и удаление</div>
+    </div>
+    <div class="tagline">Не отдельные сервисы — <span class="em">единая платформа</span></div>
+  </div>
+</section>
+
+<!-- ── SLIDE 6 : BENEFITS ── -->
+<section id="s6" class="slide slide-light">
+  <div class="corner corner-tl"></div><div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div><div class="corner corner-br"></div>
+  <div class="slide-inner reveal">
+    <div><span class="eyebrow">Ценность</span></div>
+    <div class="h2" style="margin-top:14px;margin-bottom:28px">Преимущества решения</div>
+    <div class="audience">
+      <div class="ac">
+        <div class="ac-num">01</div>
+        <div class="ac-name">Студенты</div>
+        <div class="ac-div"></div>
+        <ul class="ac-list">
+          <li>Быстрый поиск аудиторий</li>
+          <li>Актуальное расписание и БРС</li>
+          <li>Аренда самокатов</li>
+          <li>Запись к врачу онлайн</li>
+          <li>Аналитика посещаемости</li>
+        </ul>
+      </div>
+      <div class="ac">
+        <div class="ac-num">02</div>
+        <div class="ac-name">Преподаватели</div>
+        <div class="ac-div"></div>
+        <ul class="ac-list">
+          <li>Удобное бронирование</li>
+          <li>Меньше орг. вопросов</li>
+          <li>Автоуведомления</li>
+        </ul>
+      </div>
+      <div class="ac">
+        <div class="ac-num">03</div>
+        <div class="ac-name">Администрация</div>
+        <div class="ac-div"></div>
+        <ul class="ac-list">
+          <li>Аналитика помещений</li>
+          <li>Единая система управления</li>
+          <li>Снижение нагрузки</li>
+        </ul>
+      </div>
+      <div class="ac">
+        <div class="ac-num">04</div>
+        <div class="ac-name">Абитуриенты</div>
+        <div class="ac-div"></div>
+        <ul class="ac-list">
+          <li>Навигация по кампусу</li>
+          <li>Telegram-бот с FAQ</li>
+          <li>Быстрый доступ к поступлению</li>
+          <li>Современный цифровой образ</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SLIDE 7 : ARCHITECTURE ── -->
+<section id="s7" class="slide slide-dark">
+  <div class="particles"><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div></div>
+  <div class="grid-bg"></div>
+  <div class="corner corner-tl"></div><div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div><div class="corner corner-br"></div>
+  <div class="slide-inner reveal">
+    <div><span class="eyebrow">Техническое решение</span></div>
+    <div class="h2" style="margin-top:14px;margin-bottom:36px">Архитектура системы</div>
+    <div class="arch">
+      <div class="layer">
+        <span class="layer-tag">Пользователи</span>
+        <div class="layer-c">
+          <span class="node">Студенты</span>
+          <span class="node">Преподаватели</span>
+          <span class="node">Администрация</span>
+          <span class="node">Абитуриенты</span>
+        </div>
+      </div>
+      <div class="conn"></div>
+      <div class="layer l2">
+        <span class="layer-tag">Платформа SmartCampus</span>
+        <div class="layer-c">
+          <span class="node">Карта</span>
+          <span class="node">Расписание</span>
+          <span class="node">Бронирование</span>
+          <span class="node">Telegram-бот</span>
+          <span class="node">БРС / Аналитика</span>
+          <span class="node">Самокаты</span>
+          <span class="node">Поликлиника</span>
+          <span class="node">Посещаемость</span>
+        </div>
+      </div>
+      <div class="conn"></div>
+      <div class="layer">
+        <span class="layer-tag">Инфраструктура</span>
+        <div class="layer-c">
+          <div class="tech-grid">
+            <div class="tech-card">
+              <div class="tech-role">Backend</div>
+              <div class="tech-stack">Go + Gin<br>PostgreSQL · Redis</div>
+            </div>
+            <div class="tech-card">
+              <div class="tech-role">Telegram Bot</div>
+              <div class="tech-stack">Python<br>aiogram 3</div>
+            </div>
+            <div class="tech-card">
+              <div class="tech-role">Frontend</div>
+              <div class="tech-stack">TypeScript<br>React</div>
+            </div>
+            <div class="tech-card">
+              <div class="tech-role">DevOps</div>
+              <div class="tech-stack">Docker<br>CI · Ansible</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="conn"></div>
+      <div class="layer l3">
+        <span class="layer-tag">Безопасность и 152-ФЗ</span>
+        <div class="layer-c">
+          <span class="node">JWT + RBAC</span>
+          <span class="node">bcrypt</span>
+          <span class="node">Audit Log</span>
+          <span class="node">PII-маскирование</span>
+          <span class="node">Согласие на обработку ПД</span>
+          <span class="node">Экспорт / удаление данных</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SLIDE 8 : RESOURCES ── -->
+<section id="s8" class="slide slide-light">
+  <div class="corner corner-tl"></div><div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div><div class="corner corner-br"></div>
+  <div class="slide-inner reveal">
+    <div><span class="eyebrow">Ресурсы</span></div>
+    <div class="h2" style="margin-top:14px;margin-bottom:32px">Необходимые ресурсы</div>
+    <div class="res-grid">
+      <div class="rb" data-num="01">
+        <div class="rb-cat">Технологии</div>
+        <div class="rb-title">Стек и&nbsp;инфраструктура</div>
+        <div class="rb-list">
+          <div class="ri"><span class="mk"></span><strong>Backend</strong><span class="meta">— Go 1.26, Gin, JWT, bcrypt, RBAC</span></div>
+          <div class="ri"><span class="mk"></span><strong>Базы данных</strong><span class="meta">— PostgreSQL 18, Redis 8</span></div>
+          <div class="ri"><span class="mk"></span><strong>Telegram-бот</strong><span class="meta">— Python, aiogram 3, Telegram Bot API</span></div>
+          <div class="ri"><span class="mk"></span><strong>AI-ассистент</strong><span class="meta">— OpenAI-compatible API</span></div>
+          <div class="ri"><span class="mk"></span><strong>Инфраструктура</strong><span class="meta">— Docker Compose, CI/CD</span></div>
+          <div class="ri"><span class="mk" style="background:var(--green)"></span><strong>152-ФЗ</strong><span class="meta">— PII masking, consent, audit log, export/delete</span></div>
+        </div>
+      </div>
+      <div class="rb" data-num="02">
+        <div class="rb-cat">Команда</div>
+        <div class="rb-title">Специалисты</div>
+        <div class="rb-list">
+          <div class="ri"><span class="mk"></span><strong>Frontend-разработчик</strong><span class="meta">— TypeScript, React, интерфейсы</span></div>
+          <div class="ri"><span class="mk"></span><strong>Backend-разработчик</strong><span class="meta">— Go, API, база данных, интеграции</span></div>
+          <div class="ri"><span class="mk"></span><strong>Аналитик и проектировщик дизайна</strong><span class="meta">— требования, UX/UI, прототипы</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="fn"><span class="fn-m">*</span><p>Open-source решения + поэтапное внедрение для снижения затрат</p></div>
+  </div>
+</section>
+
+<!-- ── SLIDE 9 : MVP ── -->
+<section id="s9" class="slide slide-dark">
+  <div class="particles"><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div></div>
+  <div class="grid-bg"></div>
+  <div class="corner corner-tl"></div><div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div><div class="corner corner-br"></div>
+  <div class="slide-inner reveal">
+    <div><span class="eyebrow">Прототип</span></div>
+    <div class="h2" style="margin-top:14px;margin-bottom:32px">Прототипирование — MVP</div>
+    <div class="mvp-grid">
+      <div class="mc">
+        <div class="mc-ico"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><path d="M4 8l9-4 10 4 9-4v24l-9 4-10-4-9 4V8z" stroke="#C0202E" stroke-width="1.5" fill="rgba(192,32,46,.08)"/><path d="M13 4v24M23 8v24" stroke="#C0202E" stroke-width="1.2" stroke-dasharray="2 2"/><circle cx="18" cy="18" r="3" stroke="#C0202E" stroke-width="1.5"/><circle cx="18" cy="18" r="1" fill="#C0202E"/></svg></div>
+        <div class="mc-tag">Модуль 01</div>
+        <div class="mc-title">Цифровая карта</div>
+        <div class="mc-desc">Поиск аудиторий и маршруты по кампусу с текстовой навигацией для старых корпусов</div>
+      </div>
+      <div class="mc">
+        <div class="mc-ico"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><rect x="4" y="6" width="28" height="26" rx="3" stroke="#C0202E" stroke-width="1.5" fill="rgba(192,32,46,.08)"/><line x1="4" y1="14" x2="32" y2="14" stroke="#C0202E" stroke-width="1.2"/><line x1="12" y1="4" x2="12" y2="9" stroke="#C0202E" stroke-width="1.5" stroke-linecap="round"/><line x1="24" y1="4" x2="24" y2="9" stroke="#C0202E" stroke-width="1.5" stroke-linecap="round"/><rect x="9" y="18" width="4" height="3" rx="1" fill="#C0202E"/><rect x="16" y="18" width="4" height="3" rx="1" fill="rgba(192,32,46,.4)"/><rect x="23" y="18" width="4" height="3" rx="1" fill="rgba(192,32,46,.4)"/><rect x="9" y="24" width="4" height="3" rx="1" fill="rgba(192,32,46,.4)"/><rect x="16" y="24" width="4" height="3" rx="1" fill="rgba(192,32,46,.4)"/></svg></div>
+        <div class="mc-tag">Модуль 02</div>
+        <div class="mc-title">Единое расписание</div>
+        <div class="mc-desc">Расписание групп и преподавателей с push-уведомлениями об изменениях</div>
+      </div>
+      <div class="mc">
+        <div class="mc-ico"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><rect x="6" y="10" width="24" height="18" rx="4" stroke="#C0202E" stroke-width="1.5" fill="rgba(192,32,46,.08)"/><path d="M18 10V6" stroke="#C0202E" stroke-width="1.5" stroke-linecap="round"/><circle cx="18" cy="4" r="2" stroke="#C0202E" stroke-width="1.2"/><circle cx="13" cy="19" r="2.5" fill="#C0202E"/><circle cx="23" cy="19" r="2.5" fill="#C0202E"/><path d="M13 25h10" stroke="#C0202E" stroke-width="1.5" stroke-linecap="round"/><line x1="4" y1="17" x2="6" y2="17" stroke="#C0202E" stroke-width="1.5" stroke-linecap="round"/><line x1="30" y1="17" x2="32" y2="17" stroke="#C0202E" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+        <div class="mc-tag">Модуль 03</div>
+        <div class="mc-title">Telegram-бот</div>
+        <div class="mc-desc">Быстрый доступ к любой информации через привычный мессенджер и AI-ассистент</div>
+      </div>
+      <div class="mc">
+        <div class="mc-ico"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><rect x="7" y="4" width="22" height="28" rx="3" stroke="#C0202E" stroke-width="1.5" fill="rgba(192,32,46,.08)"/><path d="M14 4h8v3a2 2 0 01-2 2h-4a2 2 0 01-2-2V4z" stroke="#C0202E" stroke-width="1.2" fill="rgba(192,32,46,.15)"/><line x1="12" y1="14" x2="24" y2="14" stroke="#C0202E" stroke-width="1.2" stroke-linecap="round"/><line x1="12" y1="19" x2="22" y2="19" stroke="#C0202E" stroke-width="1.2" stroke-linecap="round"/><line x1="12" y1="24" x2="20" y2="24" stroke="#C0202E" stroke-width="1.2" stroke-linecap="round"/><path d="M20 22l3 3 5-6" stroke="#C0202E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="mc-tag">Модуль 04</div>
+        <div class="mc-title">Бронирование</div>
+        <div class="mc-desc">Резервирование аудиторий онлайн с проверкой конфликтов и подтверждением</div>
+      </div>
+      <div class="mc">
+        <div class="mc-ico"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><rect x="8" y="4" width="20" height="28" rx="3" stroke="#C0202E" stroke-width="1.5" fill="rgba(192,32,46,.08)"/><path d="M13 11h10M13 16h10M13 21h7" stroke="#C0202E" stroke-width="1.4" stroke-linecap="round"/><path d="M12 27l3 3 7-8" stroke="#C0202E" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="mc-tag">Модуль 05</div>
+        <div class="mc-title">Документооборот</div>
+        <div class="mc-desc">Цифровые заявления, справки и согласования без визитов в деканат</div>
+      </div>
+      <div class="mc">
+        <div class="mc-ico"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><rect x="5" y="8" width="26" height="22" rx="3" stroke="#C0202E" stroke-width="1.5" fill="rgba(192,32,46,.08)"/><polyline points="9,24 15,16 19,20 23,14 27,18" fill="none" stroke="#C0202E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="mc-tag">Модуль 06</div>
+        <div class="mc-title">БРС и аналитика</div>
+        <div class="mc-desc">Баллы и журнал посещений из ИСУ ГГНТУ в реальном времени</div>
+      </div>
+      <div class="mc">
+        <div class="mc-ico"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><circle cx="18" cy="22" r="8" stroke="#C0202E" stroke-width="1.5" fill="rgba(192,32,46,.08)"/><line x1="18" y1="14" x2="18" y2="6" stroke="#C0202E" stroke-width="1.5" stroke-linecap="round"/><line x1="10" y1="6" x2="26" y2="6" stroke="#C0202E" stroke-width="1.5" stroke-linecap="round"/><circle cx="18" cy="22" r="2" fill="#C0202E"/></svg></div>
+        <div class="mc-tag">Модуль 07</div>
+        <div class="mc-title">Аренда самокатов</div>
+        <div class="mc-desc">5 станций на кампусе, баланс, тарифы, реальные данные</div>
+      </div>
+      <div class="mc">
+        <div class="mc-ico"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><path d="M18 4C10.3 4 4 10.3 4 18s6.3 14 14 14 14-6.3 14-14S25.7 4 18 4z" stroke="#C0202E" stroke-width="1.5" fill="rgba(192,32,46,.08)"/><path d="M13 18l3 3 7-8" stroke="#C0202E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="mc-tag">Модуль 08</div>
+        <div class="mc-title">Поликлиника</div>
+        <div class="mc-desc">8 врачей, онлайн-запись, календарь, отмена визита</div>
+      </div>
+    </div>
+    <div class="mvp-footer">Все модули <span class="em">работают в прототипе</span> — можно попробовать прямо сейчас
+  </div>
+</section>
+
+<!-- ── SLIDE 10 : PROSPECTS ── -->
+<section id="s10" class="slide slide-light">
+  <div class="corner corner-tl"></div><div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div><div class="corner corner-br"></div>
+  <div class="slide-inner reveal">
+    <div><span class="eyebrow">Будущее</span></div>
+    <div class="h2" style="margin-top:14px;margin-bottom:40px">Перспективы развития</div>
+    <div class="tw">
+      <div class="timeline">
+        <div class="tn"><div class="tm">01</div><div class="ts">Этап 1</div><div class="tt">Интеграция с&nbsp;LMS</div><div class="td">Связь с системой дистанционного обучения</div></div>
+        <div class="tn"><div class="tm">02</div><div class="ts">Этап 2</div><div class="tt">Мониторинг транспорта</div><div class="td">Трекинг университетских автобусов</div></div>
+        <div class="tn"><div class="tm">03</div><div class="ts">Этап 3</div><div class="tt">Учёт общежития</div><div class="td">Заявки, комнаты, услуги для проживающих</div></div>
+        <div class="tn"><div class="tm">04</div><div class="ts">Этап 4</div><div class="tt">Mobile App</div><div class="td">Нативное приложение для iOS и Android</div></div>
+      </div>
+      <div class="caption"><p>Масштабируемая экосистема <span class="em">университета будущего</span></p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SLIDE 11 : CONCLUSION ── -->
+<section id="s11" class="slide slide-dark">
+  <div class="us-bg"><div style="width:1440px;height:900px" data-us-project="VEOkyvMxZmvb2NuqOyYR"></div></div>
+  <div class="grid-bg"></div>
+  <div class="corner corner-tl"></div><div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div><div class="corner corner-br"></div>
+  <div class="slide-inner reveal">
+    <div class="cey"><span class="ln"></span><span class="eyebrow">Заключение</span></div>
+    <div class="h2" style="margin-bottom:32px">Итог</div>
+    <div class="summary">9 модулей в работающем прототипе: карта, расписание, бронирование, документооборот, Telegram-бот с AI, БРС и аналитика, аренда самокатов, поликлиника, посещаемость. Всё с реальными данными ИСУ ГГНТУ.</div>
+    <div class="closing">Мы решаем не отдельную проблему, а&nbsp;<span class="em">проблему разрозненности всей университетской среды.</span></div>
+    <div class="thanks">
+      <div class="thanks-t">Спасибо за внимание</div>
+      <div class="thanks-m">SmartCampus · ГГНТУ · 2026</div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script>
+(function(){
+  const slides=document.querySelectorAll('.slide');
+  const N=slides.length;
+  const pbar=document.getElementById('pbar');
+  const scnt=document.getElementById('scnt');
+  const dotsNav=document.getElementById('dots');
+  const lightIds=new Set(['s2','s4','s6','s8','s10']);
+  let cur=0,anim=false;
+
+  // build dots
+  for(let i=0;i<N;i++){
+    const b=document.createElement('button');
+    b.innerHTML='<span class="dot"></span><span class="num">'+(String(i+1).padStart(2,'0'))+'</span>';
+    b.addEventListener('click',()=>go(i));
+    dotsNav.appendChild(b);
+  }
+  const dots=dotsNav.querySelectorAll('button');
+
+  function pad(n){return String(n+1).padStart(2,'0')}
+
+  function setTheme(i){
+    if(lightIds.has(slides[i].id))document.body.classList.add('tl');
+    else document.body.classList.remove('tl');
+  }
+
+  function updateUI(i){
+    pbar.style.width=((i+1)/N*100)+'%';
+    scnt.textContent=pad(i)+' / '+pad(N-1);
+    dots.forEach((d,j)=>d.classList.toggle('current',j===i));
+  }
+
+  function reveal(slide){
+    const items=slide.querySelectorAll('.reveal > *');
+    if(typeof gsap!=='undefined'&&items.length){
+      gsap.set(items,{opacity:0,y:20});
+      gsap.to(items,{opacity:1,y:0,duration:.7,stagger:.12,ease:'power3.out',delay:.15});
+    }else{
+      items.forEach((el,i)=>{
+        el.style.transition='none';el.style.opacity='0';el.style.transform='translateY(20px)';
+        setTimeout(()=>{el.style.transition='opacity .6s,transform .6s';el.style.opacity='1';el.style.transform='translateY(0)'},i*120+150);
+      });
+    }
+    // counters
+    slide.querySelectorAll('[data-count]').forEach(el=>{
+      const t=parseInt(el.dataset.count);
+      el.textContent='0';
+      if(typeof gsap!=='undefined'){
+        const o={v:0};
+        gsap.to(o,{v:t,duration:1.5,ease:'power2.out',delay:.3,onUpdate:()=>{el.textContent=Math.round(o.v)}});
+      }else el.textContent=t;
+    });
+    // cards scale
+    slide.querySelectorAll('.tc,.ac,.mc,.feat,.rb,.layer,.compliance-bar,.stakeholder-block,.context-box').forEach((c,i)=>{
+      if(typeof gsap!=='undefined'){
+        gsap.fromTo(c,{scale:.95,opacity:0},{scale:1,opacity:1,duration:.6,delay:.2+i*.08,ease:'power3.out'});
+      }
+    });
+  }
+
+  function go(target){
+    if(target<0||target>=N||target===cur||anim)return;
+    anim=true;
+    const prev=slides[cur];
+    const next=slides[target];
+
+    prev.classList.add('exit');
+    prev.classList.remove('active');
+
+    setTimeout(()=>setTheme(target),200);
+
+    setTimeout(()=>{
+      prev.classList.remove('exit');
+      next.classList.add('active');
+      reveal(next);
+      updateUI(target);
+      cur=target;
+      setTimeout(()=>{anim=false},550);
+    },450);
+  }
+
+  // init
+  setTheme(0);
+  slides[0].classList.add('active');
+  updateUI(0);
+  setTimeout(()=>reveal(slides[0]),200);
+
+  // keyboard
+  document.addEventListener('keydown',e=>{
+    if(['ArrowRight','ArrowDown','PageDown'].includes(e.key)){e.preventDefault();go(cur+1)}
+    else if(e.key===' '&&!e.shiftKey){e.preventDefault();go(cur+1)}
+    else if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){e.preventDefault();go(cur-1)}
+    else if(e.key==='Home'){e.preventDefault();go(0)}
+    else if(e.key==='End'){e.preventDefault();go(N-1)}
+  });
+
+  // wheel
+  let wLock=false;
+  window.addEventListener('wheel',e=>{
+    if(wLock||anim)return;wLock=true;
+    if(e.deltaY>25)go(cur+1);else if(e.deltaY<-25)go(cur-1);
+    setTimeout(()=>{wLock=false},900);
+  },{passive:true});
+
+  // touch
+  let ty=0;
+  window.addEventListener('touchstart',e=>{ty=e.touches[0].clientY},{passive:true});
+  window.addEventListener('touchend',e=>{
+    const dy=ty-e.changedTouches[0].clientY;
+    if(Math.abs(dy)>50){if(dy>0)go(cur+1);else go(cur-1)}
+  },{passive:true});
+
+})();
+</script>
+<script>!function(){var u=window.UnicornStudio;if(u&&u.init){if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",function(){u.init()})}else{u.init()}}else{window.UnicornStudio={isInitialized:!1};var i=document.createElement("script");i.src="https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v2.1.12/dist/unicornStudio.umd.js",i.onload=function(){if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",function(){UnicornStudio.init()})}else{UnicornStudio.init()}},(document.head||document.body).appendChild(i)}}();</script>
+<style>div[data-us-project] canvas{width:100%!important;height:100%!important;object-fit:cover}body .us-watermark,body [class*="watermark"],body a[href*="unicornstudio"]{display:none!important;visibility:hidden!important;opacity:0!important;width:0!important;height:0!important;overflow:hidden!important;position:absolute!important;pointer-events:none!important}</style>
+</body>
+</html>
